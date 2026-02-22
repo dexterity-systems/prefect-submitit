@@ -1,0 +1,78 @@
+[project]
+name = "your-package"
+version = "0.1.0"
+description = "A short description of your project"
+readme = "README.md"
+license = "BSD-3-Clause"
+requires-python = ">=3.12"
+maintainers = [
+    { name = "Your Name", email = "you@example.com" },
+]
+dependencies = []  # All dependencies managed by Pixi
+
+# Build settings --------------------------------------------------------------
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/your_package"]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64"]
+
+# =============================================================================
+# DEFAULT ENVIRONMENT - Core runtime dependencies
+# =============================================================================
+[tool.pixi.dependencies]
+python = "3.12.*"
+
+[tool.pixi.pypi-dependencies]
+your-package = { path = ".", editable = true }
+
+# =============================================================================
+# DEV FEATURE - Development tools (testing, linting)
+# =============================================================================
+[tool.pixi.feature.dev.dependencies]
+pytest = "*"
+ruff = ">=0.6"
+
+[tool.pixi.feature.dev.pypi-dependencies]
+build = ">=1.4.0,<2"
+twine = ">=6.2.0,<7"
+
+[tool.pixi.feature.dev.tasks]
+test = "pytest"
+fmt = "ruff format . && ruff check --fix ."
+build-dist = "rm -rf dist/ && python -m build"
+check-dist = "python -m twine check dist/*"
+upload-pypi = "python -m twine upload dist/*"
+
+# =============================================================================
+# ENVIRONMENTS
+# =============================================================================
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+
+# =============================================================================
+# TOOL CONFIGURATIONS
+# =============================================================================
+[tool.pytest.ini_options]
+minversion = "7"
+testpaths = ["tests"]
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+
+[tool.ruff]
+extend-exclude = [".pixi"]
+
+[tool.ruff.lint]
+extend-select = [
+    "B",        # flake8-bugbear
+    "I",        # isort
+    "UP",       # pyupgrade
+    "RUF",      # Ruff-specific
+    "SIM",      # flake8-simplify
+]
+isort.required-imports = ["from __future__ import annotations"]
