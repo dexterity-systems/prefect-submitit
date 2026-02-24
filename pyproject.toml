@@ -21,11 +21,7 @@ classifiers = [
     "Topic :: System :: Distributed Computing",
     "Topic :: Scientific/Engineering",
 ]
-dependencies = [
-    "prefect>=3.0",
-    "submitit>=1.5",
-    "cloudpickle>=3.0",
-]
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/uw-ssec/prefect-submitit"
@@ -50,8 +46,14 @@ platforms = ["linux-64", "osx-arm64"]
 [tool.pixi.dependencies]
 python = "3.12.*"
 
+# Pin packaging for Prefect 3.x compatibility
+packaging = ">=21.3,<25.1"
+
 [tool.pixi.pypi-dependencies]
-prefect-submitit = { path = ".", editable = true }
+prefect = { version = ">=3.6,<4.0", extras = ["dask"] }
+submitit = "*"  # For SLURM job submission
+asyncpg = "*"  # PostgreSQL async driver for Prefect server
+cloudpickle = "*"  # For serializing Python objects
 
 # =============================================================================
 # DEV FEATURE - Development tools (testing, linting)
