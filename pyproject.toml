@@ -1,6 +1,6 @@
 [project]
 name = "prefect-submitit"
-version = "0.1.0"
+version = "0.1.2"
 description = "A Prefect 3 TaskRunner that submits tasks to SLURM clusters via submitit"
 readme = "README.md"
 license = "BSD-3-Clause"
@@ -24,9 +24,9 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/uw-ssec/prefect-submitit"
-Repository = "https://github.com/uw-ssec/prefect-submitit"
-Issues = "https://github.com/uw-ssec/prefect-submitit/issues"
+Homepage = "https://github.com/dexterity-systems/prefect-submitit"
+Repository = "https://github.com/dexterity-systems/prefect-submitit"
+Issues = "https://github.com/dexterity-systems/prefect-submitit/issues"
 
 # Build settings --------------------------------------------------------------
 [build-system]
