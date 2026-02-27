@@ -26,6 +26,8 @@ dependencies = []
 Homepage = "https://github.com/dexterity-systems/prefect-submitit"
 Repository = "https://github.com/dexterity-systems/prefect-submitit"
 Issues = "https://github.com/dexterity-systems/prefect-submitit/issues"
+Documentation = "https://github.com/dexterity-systems/prefect-submitit#readme"
+Changelog = "https://github.com/dexterity-systems/prefect-submitit/blob/main/CHANGELOG.md"
 
 # Build settings --------------------------------------------------------------
 [build-system]
