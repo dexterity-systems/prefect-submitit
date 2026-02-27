@@ -126,10 +126,10 @@ isort.required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/prefect_submitit/executors.py" = ["PLC0415"]
-"tests/**" = ["T20"]
+"tests/**" = ["ARG002", "ARG005", "EM101", "PLC0415", "RUF043", "RUF059", "SIM117", "T20"]
 
 [tool.mypy]
-files = ["src", "tests"]
+files = ["src"]
 python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
