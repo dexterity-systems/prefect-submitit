@@ -2,7 +2,11 @@
 
 Thank you for your interest in contributing! This guide will help you get
 started.
+## Before You Start (for larger changes)
 
+Small fixes and docs improvements are always welcome via PR.
+
+If you’re planning a larger change (new features, behavior changes, refactors, or anything that touches multiple areas), please open an issue or start a discussion with the maintainers first. For substantial work, we may ask for a short design doc so we can align on approach before you invest a lot of time.
 ## Getting Started
 
 ### Prerequisites
