@@ -10,9 +10,14 @@ from typing import TYPE_CHECKING, Any, Self
 import submitit
 from prefect._internal.uuid7 import uuid7
 from prefect.client.schemas.objects import RunInput
+from prefect.context import FlowRunContext, serialize_context
 from prefect.futures import PrefectFuture, PrefectFutureList
+from prefect.futures import wait as prefect_wait
+from prefect.logging.loggers import get_run_logger
+from prefect.settings.context import get_current_settings
 from prefect.task_runners import TaskRunner
 from prefect.utilities.callables import cloudpickle_wrapped_call
+from prefect.utilities.engine import resolve_inputs_sync
 
 from prefect_submitit.constants import (
     DEFAULT_POLL_TIME_MULTIPLIER,
@@ -63,7 +68,7 @@ class SlurmTaskRunner(TaskRunner):
         max_array_size: int | None = None,
         **slurm_kwargs: Any,
     ):
-        super().__init__()
+        super().__init__()  # type: ignore[no-untyped-call]
 
         if execution_mode is None:
             env_backend = os.environ.get("SLURM_TASKRUNNER_BACKEND")
@@ -74,12 +79,6 @@ class SlurmTaskRunner(TaskRunner):
         elif isinstance(execution_mode, str):
             execution_mode = ExecutionMode(execution_mode)
 
-        if not isinstance(execution_mode, ExecutionMode):
-            msg = (
-                "execution_mode must be ExecutionMode enum, "
-                f"got {type(execution_mode)}"
-            )
-            raise ValueError(msg)
         if units_per_worker < 1:
             msg = f"units_per_worker must be >= 1, got {units_per_worker}"
             raise ValueError(msg)
@@ -165,7 +164,7 @@ class SlurmTaskRunner(TaskRunner):
         super().__exit__(*args)
 
     def duplicate(self) -> Self:
-        return SlurmTaskRunner(
+        return SlurmTaskRunner(  # type: ignore[return-value]
             partition=self.partition,
             time_limit=self.time_limit,
             mem_gb=self.mem_gb,
@@ -181,7 +180,7 @@ class SlurmTaskRunner(TaskRunner):
             **self.slurm_kwargs,
         )
 
-    def submit(
+    def submit(  # type: ignore[override]
         self,
         task: Task[Any, Any],
         parameters: dict[str, Any],
@@ -191,12 +190,6 @@ class SlurmTaskRunner(TaskRunner):
         if self._executor is None:
             msg = "SlurmTaskRunner must be used as context manager"
             raise RuntimeError(msg)
-
-        from prefect.context import FlowRunContext, serialize_context
-        from prefect.futures import wait as prefect_wait
-        from prefect.logging.loggers import get_run_logger
-        from prefect.settings.context import get_current_settings
-        from prefect.utilities.engine import resolve_inputs_sync
 
         if wait_for:
             prefect_wait(list(wait_for))
@@ -258,10 +251,10 @@ class SlurmTaskRunner(TaskRunner):
 
     def _partition_parameters(
         self, parameters: dict[str, Any]
-    ) -> tuple[dict[str, list], dict[str, Any]]:
+    ) -> tuple[dict[str, list[Any]], dict[str, Any]]:
         return partition_parameters(parameters)
 
-    def _validate_iterable_lengths(self, iterable_params: dict[str, list]) -> int:
+    def _validate_iterable_lengths(self, iterable_params: dict[str, list[Any]]) -> int:
         return validate_iterable_lengths(iterable_params)
 
     def _get_cluster_max_array_size(self) -> int:
@@ -271,12 +264,12 @@ class SlurmTaskRunner(TaskRunner):
         self,
         task: Task[Any, Any],
         index: int,
-        iterable_params: dict[str, list],
+        iterable_params: dict[str, list[Any]],
         static_params: dict[str, Any],
         task_run_id: uuid.UUID,
-        context: dict,
-        env: dict,
-    ) -> Callable:
+        context: dict[str, Any],
+        env: dict[str, str],
+    ) -> Callable[..., Any]:
         return build_array_callable(
             task,
             index,
@@ -297,9 +290,9 @@ class SlurmTaskRunner(TaskRunner):
         batch: list[Any],
         param_name: str,
         static_params: dict[str, Any],
-        context: dict,
-        env: dict,
-    ) -> Callable:
+        context: dict[str, Any],
+        env: dict[str, str],
+    ) -> Callable[..., Any]:
         return build_batch_callable(
             task, task_run_id, batch, param_name, static_params, context, env
         )
@@ -315,7 +308,7 @@ class SlurmTaskRunner(TaskRunner):
 
     def _submit_batch_array_chunk(
         self,
-        wrapped_calls: list[Callable],
+        wrapped_calls: list[Callable[..., Any]],
         task_run_ids: list[uuid.UUID],
         array_size: int,
     ) -> list[SlurmArrayPrefectFuture]:
@@ -324,12 +317,12 @@ class SlurmTaskRunner(TaskRunner):
     def _submit_single_job_array(
         self,
         task: Task[Any, Any],
-        iterable_params: dict[str, list],
+        iterable_params: dict[str, list[Any]],
         static_params: dict[str, Any],
         map_length: int,
         task_run_ids: list[uuid.UUID],
-        context: dict,
-        env: dict,
+        context: dict[str, Any],
+        env: dict[str, str],
     ) -> list[SlurmArrayPrefectFuture]:
         return submit_single_job_array(
             self,
@@ -345,13 +338,13 @@ class SlurmTaskRunner(TaskRunner):
     def _submit_job_array(
         self,
         task: Task[Any, Any],
-        iterable_params: dict[str, list],
+        iterable_params: dict[str, list[Any]],
         static_params: dict[str, Any],
         map_length: int,
     ) -> list[SlurmArrayPrefectFuture]:
         return submit_job_array(self, task, iterable_params, static_params, map_length)
 
-    def map(
+    def map(  # type: ignore[override]
         self,
         task: Task[Any, Any],
         parameters: dict[str, Any],
@@ -360,10 +353,6 @@ class SlurmTaskRunner(TaskRunner):
         if self._executor is None:
             msg = "SlurmTaskRunner must be used as context manager"
             raise RuntimeError(msg)
-
-        from prefect.context import FlowRunContext
-        from prefect.futures import wait as prefect_wait
-        from prefect.logging.loggers import get_run_logger
 
         if wait_for:
             prefect_wait(list(wait_for))
@@ -398,10 +387,10 @@ class SlurmTaskRunner(TaskRunner):
                 self.partition,
                 self.slurm_array_parallelism,
             )
-            futures = self._submit_batched_job_array(
+            batched_futures = self._submit_batched_job_array(
                 task, items, param_name, static_params
             )
-            return PrefectFutureList(futures)
+            return PrefectFutureList(batched_futures)  # type: ignore[abstract]
 
         logger.info(
             "Submitting %s tasks as SLURM job array (partition=%s, parallelism=%s)",
@@ -409,7 +398,7 @@ class SlurmTaskRunner(TaskRunner):
             self.partition,
             self.slurm_array_parallelism,
         )
-        futures = self._submit_job_array(
+        array_futures = self._submit_job_array(
             task, iterable_params, static_params, map_length
         )
-        return PrefectFutureList(futures)
+        return PrefectFutureList(array_futures)  # type: ignore[abstract]

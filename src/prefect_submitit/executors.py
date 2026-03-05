@@ -100,6 +100,9 @@ def run_batch_in_slurm(
     param_name = parameters.pop("_batch_param_name")
     static_params = parameters  # Remaining are static params
 
+    if task is None or task_run_id is None:
+        msg = "task and task_run_id are required in batch kwargs"
+        raise ValueError(msg)
     original_fn = task.fn
     logger = logging.getLogger("prefect.slurm.batch")
 
@@ -130,7 +133,11 @@ def run_batch_in_slurm(
             # Create the task run in Prefect's backend
             task_run = client.create_task_run(
                 task=task,
-                flow_run_id=flow_run_context.flow_run.id if flow_run_context else None,
+                flow_run_id=(
+                    flow_run_context.flow_run.id
+                    if flow_run_context and flow_run_context.flow_run
+                    else None
+                ),
                 dynamic_key=str(task_run_id),
                 id=task_run_id,
                 name=task_run_name,

@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import Any
 
 from prefect.futures import PrefectFuture
-from prefect.states import State
+from prefect.states import State  # type: ignore[attr-defined]
 
 from prefect_submitit.futures.array import (
     SlurmArrayPrefectFuture,

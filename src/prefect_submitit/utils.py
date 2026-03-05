@@ -26,9 +26,9 @@ def parse_time_to_minutes(time_str: str) -> int:
 
 def partition_parameters(
     parameters: dict[str, Any],
-) -> tuple[dict[str, list], dict[str, Any]]:
+) -> tuple[dict[str, list[Any]], dict[str, Any]]:
     """Separate iterable parameters from static ones, handling Prefect wrappers."""
-    iterable_params: dict[str, list] = {}
+    iterable_params: dict[str, list[Any]] = {}
     static_params: dict[str, Any] = {}
 
     for key, value in parameters.items():
@@ -53,7 +53,7 @@ def partition_parameters(
     return iterable_params, static_params
 
 
-def validate_iterable_lengths(iterable_params: dict[str, list]) -> int:
+def validate_iterable_lengths(iterable_params: dict[str, list[Any]]) -> int:
     """Ensure all iterables have same length and are non-empty."""
     if not iterable_params:
         msg = "No iterable parameters found for map()"
@@ -78,12 +78,12 @@ def validate_iterable_lengths(iterable_params: dict[str, list]) -> int:
 def get_cluster_max_array_size(runner: Any) -> int:
     """Get the maximum job array size with fallback and caching."""
     if runner.max_array_size is not None:
-        return runner.max_array_size
+        return int(runner.max_array_size)
     if runner._cached_max_array_size is not None:
-        return runner._cached_max_array_size
+        return int(runner._cached_max_array_size)
     if runner.execution_mode == ExecutionMode.LOCAL:
         runner._cached_max_array_size = DEFAULT_MAX_ARRAY_SIZE
-        return runner._cached_max_array_size
+        return int(runner._cached_max_array_size)
 
     try:
         result = subprocess.run(
@@ -101,7 +101,7 @@ def get_cluster_max_array_size(runner: Any) -> int:
                     "Detected cluster MaxArraySize: %s",
                     runner._cached_max_array_size,
                 )
-                return runner._cached_max_array_size
+                return int(runner._cached_max_array_size)
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
         runner.logger.warning("Could not detect MaxArraySize: %s", e)
 
@@ -109,4 +109,4 @@ def get_cluster_max_array_size(runner: Any) -> int:
     runner.logger.warning(
         "Using fallback MaxArraySize: %s", runner._cached_max_array_size
     )
-    return runner._cached_max_array_size
+    return int(runner._cached_max_array_size)

@@ -9,7 +9,10 @@ from typing import Any
 
 import submitit
 from prefect._internal.uuid7 import uuid7
+from prefect.context import serialize_context
+from prefect.settings.context import get_current_settings
 from prefect.utilities.callables import cloudpickle_wrapped_call
+from prefect.utilities.engine import resolve_inputs_sync
 
 from prefect_submitit.constants import (
     DEFAULT_POLL_TIME_MULTIPLIER,
@@ -28,15 +31,13 @@ from prefect_submitit.utils import get_cluster_max_array_size
 def build_array_callable(
     task: Any,
     index: int,
-    iterable_params: dict[str, list],
+    iterable_params: dict[str, list[Any]],
     static_params: dict[str, Any],
     task_run_id: uuid.UUID,
-    context: dict,
-    env: dict,
-) -> Callable:
+    context: dict[str, Any],
+    env: dict[str, str],
+) -> Callable[..., Any]:
     """Build a cloudpickle-wrapped callable for one array task."""
-    from prefect.utilities.engine import resolve_inputs_sync
-
     params = {key: values[index] for key, values in iterable_params.items()}
     params.update(static_params)
     resolved_params = resolve_inputs_sync(params, return_data=True, max_depth=-1)
@@ -49,7 +50,10 @@ def build_array_callable(
         "dependencies": None,
         "context": context,
     }
-    return cloudpickle_wrapped_call(run_task_in_slurm, env=env, **submit_kwargs)
+    result: Callable[..., Any] = cloudpickle_wrapped_call(
+        run_task_in_slurm, env=env, **submit_kwargs
+    )
+    return result
 
 
 def batch_items(runner: Any, items: list[Any]) -> list[list[Any]]:
@@ -66,12 +70,10 @@ def build_batch_callable(
     batch: list[Any],
     param_name: str,
     static_params: dict[str, Any],
-    context: dict,
-    env: dict,
-) -> Callable:
+    context: dict[str, Any],
+    env: dict[str, str],
+) -> Callable[..., Any]:
     """Build a callable that processes one batch in a single task run."""
-    from prefect.utilities.engine import resolve_inputs_sync
-
     params = {
         "_batch_items": batch,
         "_batch_param_name": param_name,
@@ -87,12 +89,15 @@ def build_batch_callable(
         "dependencies": None,
         "context": context,
     }
-    return cloudpickle_wrapped_call(run_batch_in_slurm, env=env, **submit_kwargs)
+    result: Callable[..., Any] = cloudpickle_wrapped_call(
+        run_batch_in_slurm, env=env, **submit_kwargs
+    )
+    return result
 
 
 def submit_batch_array_chunk(
     runner: Any,
-    wrapped_calls: list[Callable],
+    wrapped_calls: list[Callable[..., Any]],
     task_run_ids: list[uuid.UUID],
     array_size: int,
 ) -> list[SlurmArrayPrefectFuture]:
@@ -126,12 +131,12 @@ def submit_batch_array_chunk(
 def submit_single_job_array(
     runner: Any,
     task: Any,
-    iterable_params: dict[str, list],
+    iterable_params: dict[str, list[Any]],
     static_params: dict[str, Any],
     map_length: int,
     task_run_ids: list[uuid.UUID],
-    context: dict,
-    env: dict,
+    context: dict[str, Any],
+    env: dict[str, str],
 ) -> list[SlurmArrayPrefectFuture]:
     """Submit tasks as a single SLURM job array."""
     wrapped_calls = [
@@ -146,14 +151,11 @@ def submit_single_job_array(
 def submit_job_array(
     runner: Any,
     task: Any,
-    iterable_params: dict[str, list],
+    iterable_params: dict[str, list[Any]],
     static_params: dict[str, Any],
     map_length: int,
 ) -> list[SlurmArrayPrefectFuture]:
     """Submit tasks as job array(s), chunking if necessary."""
-    from prefect.context import serialize_context
-    from prefect.settings.context import get_current_settings
-
     context = serialize_context()
     env = (
         get_current_settings().to_environment_variables(exclude_unset=True) | os.environ
@@ -214,9 +216,6 @@ def submit_batched_job_array(
     static_params: dict[str, Any],
 ) -> list[SlurmBatchedItemFuture]:
     """Submit batched items as one or more SLURM arrays."""
-    from prefect.context import serialize_context
-    from prefect.settings.context import get_current_settings
-
     batches = batch_items(runner, items)
     num_batches = len(batches)
     context = serialize_context()
@@ -239,6 +238,7 @@ def submit_batched_job_array(
     ]
 
     max_array_size = get_cluster_max_array_size(runner)
+    job_futures: list[SlurmArrayPrefectFuture] = []
     if num_batches <= max_array_size:
         job_futures = submit_batch_array_chunk(
             runner, wrapped_calls, batch_task_run_ids, num_batches
@@ -251,7 +251,6 @@ def submit_batched_job_array(
             max_array_size,
             num_chunks,
         )
-        job_futures: list[SlurmArrayPrefectFuture] = []
         for chunk_idx in range(num_chunks):
             chunk_start = chunk_idx * max_array_size
             chunk_end = min(chunk_start + max_array_size, num_batches)

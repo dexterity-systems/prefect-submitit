@@ -6,15 +6,21 @@ import logging
 import time
 import uuid
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+import cloudpickle
+import submitit
 from prefect.futures import PrefectFuture
-from prefect.states import Completed, Failed, Pending, Running, State
+from prefect.states import (  # type: ignore[attr-defined]
+    Completed,
+    Failed,
+    Pending,
+    Running,
+    State,
+)
+from submitit.core.utils import FailedJobError, UncompletedJobError
 
 logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    import submitit
 
 
 class SlurmJobFailed(Exception):
@@ -50,7 +56,7 @@ class SlurmPrefectFuture(PrefectFuture[Any]):
 
     @property
     def slurm_job_id(self) -> str:
-        return self._job.job_id
+        return str(self._job.job_id)
 
     @property
     def is_done(self) -> bool:
@@ -99,9 +105,6 @@ class SlurmPrefectFuture(PrefectFuture[Any]):
         timeout: float | None = None,
         raise_on_failure: bool = True,
     ) -> Any:
-        import cloudpickle
-        from submitit.core.utils import FailedJobError, UncompletedJobError
-
         if self._result_retrieved:
             return self._result_cache
 
@@ -150,4 +153,4 @@ class SlurmPrefectFuture(PrefectFuture[Any]):
                 )
 
     def logs(self) -> tuple[str, str]:
-        return self._job.stdout(), self._job.stderr()
+        return self._job.stdout() or "", self._job.stderr() or ""
