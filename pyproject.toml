@@ -51,6 +51,7 @@ python = "3.12.*"
 packaging = ">=21.3,<25.1"
 
 [tool.pixi.pypi-dependencies]
+prefect-submitit = { path = ".", editable = true }
 prefect = { version = ">=3.6,<4.0", extras = ["dask"] }
 submitit = "*"  # For SLURM job submission
 asyncpg = "*"  # PostgreSQL async driver for Prefect server
