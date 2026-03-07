@@ -102,6 +102,8 @@ def cancel(self) -> bool:
         return False
 ```
 
+**Note:** `base.py` will need `import subprocess` added.
+
 **Impact on `SlurmArrayPrefectFuture`:** The existing `cancel()` in the subclass cancels by `self._array_job_id` (the whole array). The base class version cancels by `self.slurm_job_id`. For array futures, `slurm_job_id` is `{array_id}_{task_index}`, so the base class `cancel()` would cancel a single task — which is actually what `cancel_task()` does. The subclass override that cancels the entire array is preserved, so behavior is unchanged for array futures.
 
 ### C. Handle `CANCELLED by <uid>` state variant
@@ -115,9 +117,10 @@ def cancel(self) -> bool:
 ```python
 def _is_terminal_failure(self, slurm_state: str) -> bool:
     """Check if a SLURM state represents a terminal failure."""
+    normalized = slurm_state.rstrip("+")
     return (
-        slurm_state in self.TERMINAL_FAILURE_STATES
-        or slurm_state.startswith("CANCELLED")
+        normalized in self.TERMINAL_FAILURE_STATES
+        or normalized.startswith("CANCELLED")
     )
 ```
 
@@ -142,11 +145,12 @@ These two helpers centralize the failure-detection logic so it's consistent acro
 @property
 def state(self) -> State:
     slurm_state = self._job.state
-    if slurm_state == "COMPLETED":
+    normalized = slurm_state.rstrip("+")
+    if normalized == "COMPLETED":
         return Completed()
     if self._is_terminal_failure(slurm_state):
         return Failed(message=f"SLURM: {slurm_state}")
-    if slurm_state == "RUNNING":
+    if normalized == "RUNNING":
         return Running()
     return Pending()
 ```
@@ -205,6 +209,7 @@ self.poll_interval = (
 | `tests/futures/test_base.py` | Tests for post-loop failure detection, cancel(), `CANCELLED by` handling, timeout message content |
 | `tests/futures/test_array.py` | Verify array cancel() still works with base class cancel() present |
 | `tests/test_runner.py` | Update any tests that assert `poll_interval == 30.0` |
+| `tests/conftest.py` | Update hardcoded `poll_interval = 30.0` to `5.0` |
 
 ---
 
@@ -221,9 +226,11 @@ self.poll_interval = (
    - Mock `subprocess.run` success — verify `cancel()` returns `True` and calls `scancel` with correct job ID.
    - Mock `subprocess.run` raising `CalledProcessError` — verify returns `False`.
 
-3. **CANCELLED by variant (C):**
+3. **CANCELLED by variant and `+` suffix (C):**
    - Future with `job.state = "CANCELLED by 1000"` — verify `state` property returns `Failed`.
    - Same state in `wait()` — verify `SlurmJobFailed` is raised.
+   - Future with `job.state = "TIMEOUT+"` — verify `state` property returns `Failed`.
+   - Future with `job.state = "CANCELLED+"` — verify detected as terminal failure.
 
 4. **Timeout message (D):**
    - Trigger timeout — verify error message contains `last observed state:`.
@@ -234,7 +241,7 @@ self.poll_interval = (
 
 ### Existing tests to update
 
-- Any test asserting `poll_interval == 30.0` needs to change to `5.0`.
+- Any test asserting `poll_interval == 30.0` needs to change to `5.0` (in `tests/test_runner.py` and `tests/conftest.py`).
 - The `test_wait_failure_state_raises` test covers the in-loop check; the new post-loop test complements it.
 
 ---
