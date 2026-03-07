@@ -53,8 +53,8 @@ class SlurmTestConfig:
 
 ### Pytest markers and collection
 
-```ini
-# pyproject.toml additions
+```toml
+# pyproject.toml [tool.pytest.ini_options] additions
 markers = [
     "slurm: tests that submit real SLURM jobs (deselected unless --run-slurm)",
     "slurm_gpu: tests that require a GPU partition",
@@ -142,8 +142,22 @@ def prefect_server(slurm_config):
 **Fallback:** If `PREFECT_API_URL` is already set (user has an existing server),
 skip starting one and use the existing URL.
 
-**Skip condition:** If no Prefect server can be started or reached, Tier 2 tests
-are skipped, but Tier 1 (SLURM-mechanics-only) tests still run.
+**Skip condition:** If no Prefect server can be started or reached, tests that
+require Prefect API access (P2 tests like `test_task_run_in_prefect_api`,
+`test_batch_task_run_state`, `test_flow_run_context_on_compute_node`) are
+skipped, but P0/P1 tests (SLURM mechanics only) still run.
+
+**Hostname resolution caveat:** `socket.getfqdn()` may not return a hostname
+that compute nodes can resolve. If the FQDN is not routable, fall back to an
+IP address:
+```python
+import socket
+hostname = socket.getfqdn()
+try:
+    socket.getaddrinfo(hostname, None)
+except socket.gaierror:
+    hostname = socket.gethostbyname(socket.gethostname())
+```
 
 ---
 
@@ -197,34 +211,15 @@ def slurm_runner(slurm_config, tmp_path):
     return runner
 ```
 
-### Flow context fixture
+### Flow context via inline `@flow` functions
 
 Many tests need a Prefect flow run context (since `SlurmTaskRunner.submit()`
-reads `FlowRunContext.get()`). Rather than running a real flow, we create a
-minimal flow context:
-
-```python
-@pytest.fixture
-def flow_context(prefect_server):
-    """Run test body inside a Prefect flow context."""
-    @prefect.flow
-    def _test_flow():
-        yield  # test body runs here
-
-    # Use Prefect's test utilities or context manager
-    ...
-```
-
-Alternatively, the simplest portable approach: **define actual `@flow`-decorated
-functions** that use the runner, and call them from tests. This avoids manual
-context setup and matches real usage:
+reads `FlowRunContext.get()`). The simplest portable approach: **define actual
+`@flow`-decorated functions** inside each test and call them. This avoids
+manual context setup and exercises the full Prefect flow→task→runner pipeline:
 
 ```python
 def test_single_task_submit(slurm_runner, prefect_server, slurm_jobs):
-    @task
-    def add(a, b):
-        return a + b
-
     @flow(task_runner=slurm_runner)
     def my_flow():
         future = add.submit(1, 2)
@@ -233,9 +228,6 @@ def test_single_task_submit(slurm_runner, prefect_server, slurm_jobs):
 
     assert my_flow() == 3
 ```
-
-This is the **recommended pattern** — it's simple, mirrors real usage, and
-exercises the full Prefect flow→task→runner pipeline.
 
 ---
 
@@ -377,12 +369,10 @@ Map 10 items with `slurm_array_parallelism=3`.
 
 #### P1: `test_map_one_task_fails`
 Map 5 items where item 3 raises `ValueError`.
-- **Asserts:** Items 1,2,4,5 return correct values; item 3's future raises
-  `SlurmJobFailed` (because the SLURM job itself exits non-zero when
-  `run_task_sync` hits an unhandled exception)
-- **Actually:** Prefect's `run_task_sync` catches the exception and returns a
-  `Failed` state. The state is pickled. On the submission host,
-  `state.result()` re-raises the original `ValueError`.
+- **Asserts:** Items 1,2,4,5 return correct values; item 3's future re-raises
+  the original `ValueError` (Prefect's `run_task_sync` catches the exception,
+  returns a `Failed` state which is pickled; on the submission host,
+  `state.result()` re-raises the original exception)
 - **Validates:** Per-array-task failure isolation and error propagation
 - **Portability:** Fully portable
 
@@ -460,6 +450,9 @@ Cancel a running task, then inspect the state string.
 #### P2: `test_cancel_batch_mid_execution`
 Submit a batch of 5 items where each sleeps 10s. Cancel after ~2 items
 should have completed.
+- **Cancel via:** `future.slurm_job_future.cancel()` (since
+  `SlurmBatchedItemFuture` does not have a `cancel()` method — cancellation
+  targets the underlying SLURM job)
 - **Asserts:** Some `SlurmBatchedItemFuture.result()` calls return values;
   later ones return `{"success": False, "error": "...terminated early"}`.
   OR all fail if cancellation is fast enough.
@@ -504,18 +497,12 @@ Submit a task that sleeps longer than `time_limit`.
 - **Wait:** Takes ~60s of wall time (the time limit)
 
 #### P2: `test_unpicklable_return_raises_cleanly`
-Submit a task that returns something cloudpickle can't deserialize on the
-submission host (e.g., a `module` object — actually cloudpickle handles most
-things. Better: return a result, then corrupt the pickle file before
-`result()` is called).
-- **Alternative approach:** Submit a task whose result is valid, but mock
-  `cloudpickle.loads` to raise. This is really a unit test concern.
-- **Revised:** Test that a task returning a `lambda` works (cloudpickle
-  handles it), confirming the serialization path. If we want to test
-  failure, submit a task that creates a non-picklable object and try to
-  return it — this would fail inside `run_task_sync` and produce a Failed
-  state with PicklingError.
+Submit a task that attempts to return a non-picklable object (e.g., an open
+file handle or a generator). This fails inside `run_task_sync`, which produces
+a `Failed` state containing a `PicklingError`.
 - **Asserts:** `future.result()` raises with pickling-related error info
+- **Validates:** Exception → Failed State → pickle → deserialize → re-raise
+  for serialization failures specifically
 - **Portability:** Fully portable
 
 #### P2: `test_invalid_partition_fails_cleanly`
@@ -623,7 +610,8 @@ def get_flow_run_id() -> str:
 
 @task
 def fail_with(error_type: str, message: str):
-    raise getattr(__builtins__, error_type, ValueError)(message)
+    import builtins
+    raise getattr(builtins, error_type, ValueError)(message)
 
 @task
 def conditional_fail(x: int, fail_on: int = -1):
@@ -642,6 +630,10 @@ def print_marker(marker: str) -> str:
 **Why module-level?** cloudpickle serializes functions by reference when
 possible. Functions defined inside test bodies may capture test-local state
 that's not available on compute nodes, causing `AttributeError` on unpickling.
+
+**Note:** All implementation files must include `from __future__ import
+annotations` as the first import, per project ruff configuration
+(`isort.required-imports`).
 
 ---
 
@@ -777,3 +769,30 @@ check. The standard CI pipeline continues to run unit tests only.
    Cloudpickle version skew is a real risk. **Recommendation:** not in this
    test suite — it's an environment setup concern. Document it as a known
    requirement.
+
+---
+
+## 12. Known implementation issues to resolve before/during integration tests
+
+These issues were identified in the `SlurmPrefectFuture` implementation during
+review. They should be fixed before the integration tests are written, or the
+tests should be designed to account for them.
+
+1. **`wait()` contract deviation from `PrefectFuture`.**
+   Prefect's `PrefectFuture.wait()` contract says it should return silently
+   when the timeout elapses. `SlurmPrefectFuture.wait()` raises `TimeoutError`
+   instead. It also raises `SlurmJobFailed` for terminal failure states, which
+   should arguably be deferred to `result()`. The integration tests
+   (`test_max_poll_time_fires`, `test_cancel_running_task`) currently expect
+   these exceptions from `wait()`, so either the tests match the current
+   behavior or the implementation is fixed to match the protocol.
+
+2. **`timeout=0` bug in `wait()`.**
+   `effective_timeout = timeout or self._max_poll_time` treats `0` as falsy,
+   so `wait(timeout=0)` waits for `max_poll_time` instead of returning
+   immediately. Fix: `timeout if timeout is not None else self._max_poll_time`.
+
+3. **`SlurmBatchedItemFuture` has no `cancel()` method.**
+   Batch cancellation tests must go through `future.slurm_job_future.cancel()`
+   to cancel the underlying SLURM job. Consider adding a `cancel()` delegation
+   method for API consistency.
