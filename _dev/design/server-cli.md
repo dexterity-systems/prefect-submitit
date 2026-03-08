@@ -186,8 +186,16 @@ Same JSON format, updated path:
 }
 ```
 
-Written on server start, removed on server stop. The `project_root` field is
-dropped since data now lives in `~/.prefect-submitit/`.
+Written on server start, removed on server stop. Two changes from the shell
+scripts:
+
+- **Path change**: the discovery file moves from
+  `~/.prefect-submitit/prefect/server.json` to `~/.prefect-submitit/server.json`
+  (the `prefect/` subdirectory is removed since `~/.prefect-submitit/` is already
+  scoped to this project).
+- **`project_root` field dropped**: no longer needed since data lives in
+  `~/.prefect-submitit/` instead of `$PROJECT_ROOT/`. Any downstream code that
+  reads this field (e.g., artisan's `prefect_server.py`) must be updated.
 
 ### Data directory layout
 
@@ -202,6 +210,24 @@ dropped since data now lives in `~/.prefect-submitit/`.
 └── logs/                    # Prefect server logs
     └── prefect-server-20260308-103000.log
 ```
+
+### Migration of existing data
+
+The shell scripts store PostgreSQL data at `$PROJECT_ROOT/.prefect-postgres`.
+The Python CLI moves this to `~/.prefect-submitit/postgres/`. On first run,
+`init-db` and `start` (with postgres backend) check for an existing data
+directory at the new location. If absent, they initialize fresh.
+
+Users with existing data can migrate manually:
+
+```bash
+mv $PROJECT_ROOT/.prefect-postgres ~/.prefect-submitit/postgres
+```
+
+The CLI does **not** auto-migrate or auto-detect old data — this keeps the code
+simple and the old location is project-specific (users may have multiple
+checkouts). The shell scripts continue to work with the old location until they
+are removed, so there is no breakage during the transition.
 
 ### Migration from shell scripts
 
