@@ -47,8 +47,14 @@ platforms = ["linux-64", "osx-arm64"]
 [tool.pixi.dependencies]
 python = "3.12.*"
 
+# Jupyter kernel (allows registering the env as a Jupyter kernel)
+ipykernel = "*"
+
 # Pin packaging for Prefect 3.x compatibility
 packaging = ">=21.3,<25.1"
+
+# PostgreSQL for Prefect server (handles concurrency better than SQLite)
+postgresql = ">=16"
 
 [tool.pixi.pypi-dependencies]
 prefect-submitit = { path = ".", editable = true }
@@ -61,11 +67,20 @@ cloudpickle = "*"  # For serializing Python objects
 # DEV FEATURE - Development tools (testing, linting)
 # =============================================================================
 [tool.pixi.feature.dev.dependencies]
+# Interactive development
+ipython = "*"
+ipykernel = "*"
+notebook = ">=7.5.0,<8"
+jupyterlab = ">=4.5.0,<5"
+
+# Testing
 pytest = "*"
+pytest-timeout = "*"
+
+# Linting and formatting
 ruff = ">=0.6"
 pre-commit = ">=4.3.0,<5"
 mypy = ">=1.19.0,<2"
-pytest-timeout = "*"
 
 [tool.pixi.feature.dev.pypi-dependencies]
 build = ">=1.4.0,<2"
@@ -81,6 +96,14 @@ build-dist = "rm -rf dist/ && python -m build"
 check-dist = "python -m twine check dist/*"
 upload-testpypi = "python -m twine upload --repository testpypi dist/*"
 upload-pypi = "python -m twine upload dist/*"
+
+# =============================================================================
+# TASKS
+# =============================================================================
+[tool.pixi.tasks]
+prefect-start = "./scripts/prefect/start_prefect_server.sh --bg"
+prefect-stop = "./scripts/prefect/stop_prefect_server.sh -f"
+install-kernel = "python -m ipykernel install --user --name=prefect-submitit --display-name='Prefect-Submitit'"
 
 # =============================================================================
 # ENVIRONMENTS
@@ -108,7 +131,7 @@ markers = [
 ]
 
 [tool.ruff]
-extend-exclude = [".pixi"]
+extend-exclude = ["examples", "_dev", ".pixi"]
 
 [tool.ruff.lint]
 extend-select = [
