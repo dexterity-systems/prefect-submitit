@@ -56,6 +56,11 @@ class TestTaskDependencies:
 class TestPrefectAPIIntegration:
     """P2: Prefect API visibility."""
 
+    @pytest.mark.xfail(
+        reason="Prefect EventsWorker websocket auth fails from compute nodes; "
+        "task run events don't reach the ephemeral server",
+        strict=False,
+    )
     def test_task_run_in_prefect_api(self, slurm_runner, slurm_jobs, prefect_server):
         if not prefect_server:
             pytest.skip("No Prefect server available")
@@ -85,6 +90,11 @@ class TestPrefectAPIIntegration:
         assert len(matching) >= 1
         assert any(tr.state.is_completed() for tr in matching)
 
+    @pytest.mark.xfail(
+        reason="Prefect EventsWorker websocket auth fails from compute nodes; "
+        "task run events don't reach the ephemeral server",
+        strict=False,
+    )
     def test_task_run_name_contains_slurm_job_id(
         self, slurm_runner, slurm_jobs, prefect_server
     ):

@@ -111,6 +111,11 @@ class TestBatchParameters:
 class TestBatchPrefectAPI:
     """P2: Batch task run state in Prefect API."""
 
+    @pytest.mark.xfail(
+        reason="Prefect EventsWorker websocket auth fails from compute nodes; "
+        "task run events don't reach the ephemeral server",
+        strict=False,
+    )
     def test_batch_task_run_state(
         self, slurm_config, slurm_jobs, prefect_server
     ):
