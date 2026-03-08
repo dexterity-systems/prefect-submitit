@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import os
+import re
 import socket
 import subprocess
 import time
@@ -160,6 +162,31 @@ def prefect_server(request, slurm_config):  # noqa: ARG001
     settings.api.url = api_url
     yield api_url
 
+    # Drain Prefect's background workers before stopping the server
+    # to avoid "Error logging to API" from in-flight requests.
+    try:
+        from prefect._internal.concurrency.api import run_coro_as_sync
+        from prefect.events.worker import EventsWorker
+        from prefect.logging.handlers import APILogWorker
+
+        async def _drain():
+            try:
+                result = APILogWorker.drain_all()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                pass
+            try:
+                result = EventsWorker.drain_all()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception:
+                pass
+
+        run_coro_as_sync(_drain())
+    except Exception:
+        pass
+
     os.environ.pop("PREFECT_API_URL", None)
     if old_url:
         os.environ["PREFECT_API_URL"] = old_url
@@ -178,10 +205,14 @@ def prefect_server(request, slurm_config):  # noqa: ARG001
 
 
 @pytest.fixture
-def slurm_runner(slurm_config):
+def slurm_runner(request, slurm_config):
     """A configured SlurmTaskRunner for testing."""
     log_dir = slurm_config.log_dir / "slurm_logs"
     log_dir.mkdir(parents=True, exist_ok=True)
+
+    # Sanitize test name for use as SLURM job name
+    raw_name = request.node.name
+    sanitized = re.sub(r"[^a-zA-Z0-9_-]", "_", raw_name)[:50]
 
     extra_kwargs = {}
     if slurm_config.account:
@@ -197,6 +228,7 @@ def slurm_runner(slurm_config):
         poll_interval=2.0,
         max_poll_time=slurm_config.max_wait + 300,
         log_folder=str(log_dir),
+        slurm_job_name=sanitized,
         **extra_kwargs,
     )
 
