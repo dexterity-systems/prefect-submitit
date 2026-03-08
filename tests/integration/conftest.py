@@ -206,11 +206,18 @@ def slurm_runner(slurm_config):
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(scope="session")
+def _session_slurm_job_ids():
+    """Session-wide set of all SLURM job IDs submitted during tests."""
+    return set()
+
+
 @pytest.fixture
-def slurm_jobs():
+def slurm_jobs(_session_slurm_job_ids):
     """Track submitted SLURM job IDs for teardown cleanup."""
     job_ids: list[str] = []
     yield job_ids
+    _session_slurm_job_ids.update(job_ids)
     if job_ids:
         subprocess.run(
             ["scancel", *job_ids],
@@ -232,28 +239,19 @@ def poll_for_task_runs(client, filter_fn, retries=15, delay=2):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _session_job_cleanup(request):
-    """Safety-net: scancel any jobs found in log dirs at session end."""
+def _session_job_cleanup(request, _session_slurm_job_ids):
+    """Safety-net: scancel test jobs that weren't cleaned up per-test."""
     yield
     if not request.config.getoption("--run-slurm"):
         return
-    # Best-effort cleanup of any leftover jobs
+    if not _session_slurm_job_ids:
+        return
     try:
-        result = subprocess.run(
-            ["squeue", "--me", "--noheader", "-o", "%A"],
+        subprocess.run(
+            ["scancel", *_session_slurm_job_ids],
             capture_output=True,
-            text=True,
             timeout=10,
             check=False,
         )
-        if result.returncode == 0 and result.stdout.strip():
-            job_ids = result.stdout.strip().split()
-            if job_ids:
-                subprocess.run(
-                    ["scancel", *job_ids],
-                    capture_output=True,
-                    timeout=10,
-                    check=False,
-                )
     except Exception:
         pass

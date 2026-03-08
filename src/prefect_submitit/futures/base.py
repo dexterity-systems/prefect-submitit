@@ -181,12 +181,20 @@ class SlurmPrefectFuture(PrefectFuture[Any]):
         except subprocess.CalledProcessError:
             return False
 
-    def logs(self) -> tuple[str, str]:
-        """Read stdout/stderr logs with NFS cache invalidation."""
-        return (
-            self._read_log_nfs_safe(self._job.paths.stdout),
-            self._read_log_nfs_safe(self._job.paths.stderr),
-        )
+    def logs(self, _retries: int = 5, _delay: float = 1.0) -> tuple[str, str]:
+        """Read stdout/stderr logs with NFS cache invalidation.
+
+        Retries briefly when the stdout file is empty, since ``srun`` may
+        not have flushed its output buffer by the time the result pickle
+        is available.
+        """
+        for attempt in range(_retries):
+            stdout = self._read_log_nfs_safe(self._job.paths.stdout)
+            if stdout or attempt == _retries - 1:
+                break
+            time.sleep(_delay)
+        stderr = self._read_log_nfs_safe(self._job.paths.stderr)
+        return stdout, stderr
 
     @staticmethod
     def _read_log_nfs_safe(path: Path) -> str:

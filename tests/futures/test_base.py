@@ -263,7 +263,7 @@ class TestSlurmPrefectFuture:
         job.paths.stderr = tmp_path / "nonexistent_stderr.txt"
         future = SlurmPrefectFuture(job, uuid4(), 1.0, 60.0)
 
-        stdout, stderr = future.logs()
+        stdout, stderr = future.logs(_retries=1)
 
         assert stdout == ""
         assert stderr == ""
