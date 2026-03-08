@@ -73,6 +73,7 @@ twine = ">=6.2.0,<7"
 
 [tool.pixi.feature.dev.tasks]
 test = "pytest"
+test-slurm = { cmd = "pytest --run-slurm", env = { SLURM_TEST_PARTITION = "cpu" } }
 fmt = "ruff format . && ruff check --fix ."
 install-hooks = "pre-commit install"
 pre-commit = "pre-commit run --all-files"

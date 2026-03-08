@@ -85,17 +85,8 @@ class TestPolling:
         with pytest.raises(TimeoutError):
             compute()
 
-    @pytest.mark.xfail(
-        reason="Known Issue 2: timeout=0 treated as falsy, waits max_poll_time instead",
-        strict=True,
-    )
     def test_wait_timeout_zero(self, slurm_config, slurm_jobs):
-        """wait(timeout=0) should return immediately but doesn't.
-
-        Bug: effective_timeout = timeout or self._max_poll_time
-        treats 0 as falsy, so wait(timeout=0) waits for max_poll_time.
-        Fix: timeout if timeout is not None else self._max_poll_time
-        """
+        """wait(timeout=0) should raise TimeoutError immediately."""
         extra_kwargs = {}
         if slurm_config.account:
             extra_kwargs["slurm_account"] = slurm_config.account

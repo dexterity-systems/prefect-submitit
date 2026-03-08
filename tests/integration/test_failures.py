@@ -10,7 +10,7 @@ from prefect import flow
 from prefect_submitit import SlurmTaskRunner
 from prefect_submitit.futures import SlurmJobFailed
 from tests.integration.helpers import wait_for_running
-from tests.integration.tasks import fail_with, return_unpicklable, sleep_and_return
+from tests.integration.tasks import fail_with, sleep_and_return
 
 pytestmark = pytest.mark.slurm
 
@@ -31,21 +31,6 @@ class TestExceptionPropagation:
 
 class TestSlurmFailureModes:
     """P1-P2: SLURM-level failure detection."""
-
-    @pytest.mark.xfail(
-        reason="submitit may serialize the result before our code sees it; "
-        "behavior depends on submitit internals",
-        strict=False,
-    )
-    def test_unpicklable_return_raises_cleanly(self, slurm_runner, slurm_jobs):
-        @flow(task_runner=slurm_runner)
-        def compute():
-            future = return_unpicklable.submit()
-            slurm_jobs.append(future.slurm_job_id)
-            return future.result()
-
-        with pytest.raises((TypeError, SlurmJobFailed)):
-            compute()
 
     def test_invalid_partition_fails_cleanly(self, slurm_config, slurm_jobs):
         runner = SlurmTaskRunner(

@@ -125,15 +125,11 @@ def _get_routable_hostname() -> str:
 def prefect_server(request, slurm_config):  # noqa: ARG001
     """Start an ephemeral Prefect server for the test session.
 
-    If PREFECT_API_URL is already set, reuses the existing server.
+    Always starts a fresh server to avoid version mismatches with
+    pre-existing servers. Any existing PREFECT_API_URL is overridden.
     """
     if not request.config.getoption("--run-slurm"):
         yield None
-        return
-
-    existing_url = os.environ.get("PREFECT_API_URL")
-    if existing_url:
-        yield existing_url
         return
 
     hostname = _get_routable_hostname()

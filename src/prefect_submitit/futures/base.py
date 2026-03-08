@@ -90,7 +90,7 @@ class SlurmPrefectFuture(PrefectFuture[Any]):
         raise SlurmJobFailed(msg)
 
     def wait(self, timeout: float | None = None) -> None:
-        effective_timeout = timeout or self._max_poll_time
+        effective_timeout = timeout if timeout is not None else self._max_poll_time
         start = time.time()
 
         while not self._job.done():

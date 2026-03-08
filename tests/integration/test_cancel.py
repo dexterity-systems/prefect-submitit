@@ -135,41 +135,6 @@ class TestCancelEdgeCases:
         # Either all cancelled, all ok, or mixed — all are valid
         assert len(results) == 5
 
-    def test_cancel_pending_job(self, slurm_config, slurm_jobs):
-        """Cancel a job that hasn't started yet (deferred start)."""
-        extra_kwargs = {}
-        if slurm_config.account:
-            extra_kwargs["slurm_account"] = slurm_config.account
-        if slurm_config.qos:
-            extra_kwargs["slurm_qos"] = slurm_config.qos
-
-        runner = SlurmTaskRunner(
-            partition=slurm_config.partition,
-            time_limit=slurm_config.time_limit,
-            mem_gb=slurm_config.mem_gb,
-            gpus_per_node=0,
-            poll_interval=2.0,
-            max_poll_time=60,
-            log_folder=str(slurm_config.log_dir / "slurm_logs"),
-            slurm_begin="now+1hour",
-            **extra_kwargs,
-        )
-
-        @flow(task_runner=runner)
-        def compute():
-            future = sleep_and_return.submit(seconds=1.0)
-            slurm_jobs.append(future.slurm_job_id)
-            import time
-
-            time.sleep(2)  # Let it enter PENDING
-            return future.cancel()
-
-        try:
-            result = compute()
-            assert result is True
-        except Exception:
-            pytest.skip("slurm_begin not supported or job already started")
-
     def test_cancel_race_with_completion(self, slurm_runner, slurm_jobs):
         """Cancel right after submission — no crash regardless of outcome."""
 

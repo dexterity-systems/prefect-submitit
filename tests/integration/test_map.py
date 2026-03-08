@@ -132,10 +132,6 @@ class TestMapFailures:
 class TestMapPrefectAPI:
     """P2: Map task visibility in Prefect API."""
 
-    @pytest.mark.xfail(
-        reason="Task run names are set on compute nodes; may not propagate to API",
-        strict=False,
-    )
     def test_map_array_task_names_in_api(
         self, slurm_runner, slurm_jobs, prefect_server
     ):
