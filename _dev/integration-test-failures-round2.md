@@ -171,10 +171,6 @@ assert len(matching) >= 1
 
 Extend `_wait_for_server()` to also check that `ws://<host>:<port>/api/events/in` is accepting connections before tests proceed.
 
-**Fix D (Long-term): Create task runs via REST API in the runner**
-
-Since SLURM jobs run on separate compute nodes where websocket connectivity may be unreliable, the `SlurmTaskRunner` could explicitly create and update task runs via `client.create_task_run()` / `client.set_task_run_state()` instead of relying on the EventsWorker websocket. This would make task run visibility resilient to websocket failures. Check `executors.py` — `run_batch_in_slurm()` may already have partial support for this pattern.
-
 **Confidence:** Certain — error is in every SLURM job log. Same root cause as lesson #2.
 
 ---
@@ -194,4 +190,3 @@ Since SLURM jobs run on separate compute nodes where websocket connectivity may 
 3. Apply fix #3A — kill stale Prefect servers in fixture
 4. Apply fix #3B — add retry polling in Prefect API tests
 5. Re-run integration tests to verify
-6. Consider fix #3D (REST API task run creation) as a follow-up for production robustness
