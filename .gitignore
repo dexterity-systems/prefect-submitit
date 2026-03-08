@@ -34,3 +34,10 @@ pixi.lock
 # SLURM logs
 slurm_logs/
 .slurm_test_logs/
+
+# Claude Code
+CLAUDE.local.md
+
+# Prefect server
+.prefect-postgres/
+scripts/prefect/prefect-logs/

@@ -94,9 +94,73 @@ Requires [Pixi](https://pixi.sh):
 
 ```bash
 pixi install
-pixi run -e dev test
 pixi run -e dev fmt
+pixi run -e dev test
 ```
+
+### Prefect Server
+
+The repo includes scripts to run a local Prefect server backed by PostgreSQL
+(handles SLURM concurrency better than SQLite). The server uses a UID-based
+port to avoid conflicts on shared nodes.
+
+```bash
+pixi run prefect-start   # Start in background (PostgreSQL + Prefect)
+pixi run prefect-stop    # Stop the server
+```
+
+The start script automatically:
+- Initializes PostgreSQL on first run (stored in `.prefect-postgres/`)
+- Picks a UID-based port (range 4200-4999) to avoid conflicts
+- Uses the node's FQDN so SLURM workers on compute nodes can reach it
+- Writes a discovery file to `~/.prefect-submitit/prefect/server.json`
+- Tunes connection pool sizes for high-concurrency SLURM workloads
+
+Use `--sqlite` if you don't need PostgreSQL:
+
+```bash
+./scripts/prefect/start_prefect_server.sh --sqlite
+```
+
+### IDE Setup (VSCode)
+
+**Python Interpreter:** Set the Pixi environment as your VSCode Python
+interpreter:
+
+```bash
+pixi run which python
+# Example output: /home/user/prefect-submitit/.pixi/envs/default/bin/python
+```
+
+In VSCode: `Ctrl+Shift+P` → "Python: Select Interpreter" → paste the path.
+
+**Jupyter Kernel:** Register the Pixi environment as a Jupyter kernel so
+notebooks use the correct packages:
+
+```bash
+pixi run install-kernel
+```
+
+In VSCode: open a `.ipynb` file → click "Select Kernel" → choose
+**Prefect-Submitit**.
+
+> **Tip:** If the Jupyter kernel takes 30+ seconds to start in VS Code, the
+> `Python Environments` extension (`ms-python.vscode-python-envs`) is likely
+> the cause. Uninstall it — the core Python extension works fine without it.
+> Tracked upstream:
+> [microsoft/vscode-python#25804](https://github.com/microsoft/vscode-python/issues/25804)
+
+### Running Demos
+
+The `examples/` directory contains demo notebooks. After setting up:
+
+```bash
+pixi install               # Install all dependencies
+pixi run install-kernel    # Register Jupyter kernel
+pixi run prefect-start     # Start Prefect server
+```
+
+Then open any notebook in `examples/` and select the **Prefect-Submitit** kernel.
 
 ## License
 
