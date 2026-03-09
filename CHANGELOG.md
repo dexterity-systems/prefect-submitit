@@ -28,6 +28,10 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Integration tests use shared filesystem for SLURM logs instead of `tmp_path`.
 - `require_binary()` falls back to interpreter's bin directory for Jupyter
   kernel environments where PATH is incomplete.
+- `prefect-server start` is now idempotent — skips startup when the server is
+  already running and healthy.
+- `default_host()` falls back to the short-hostname IP when the FQDN is
+  unresolvable.
 
 ### Changed
 

@@ -25,12 +25,20 @@ def default_port() -> int:
 
 
 def default_host() -> str:
-    """Return the FQDN for cross-node access.
+    """Return a resolvable hostname for cross-node access.
+
+    Falls back to the IP of the short hostname when the FQDN
+    (e.g. an IPv6 PTR for 0.0.0.0) cannot be resolved.
 
     Returns:
-        Fully qualified domain name.
+        Resolvable hostname or IP address.
     """
-    return socket.getfqdn()
+    hostname = socket.getfqdn()
+    try:
+        socket.getaddrinfo(hostname, None)
+        return hostname
+    except socket.gaierror:
+        return socket.gethostbyname(socket.gethostname())
 
 
 @dataclass(frozen=True)

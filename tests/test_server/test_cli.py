@@ -83,6 +83,37 @@ class TestArgParsing:
             main(["unknown-cmd"])
 
 
+class TestStartIdempotency:
+    def test_skips_start_when_already_healthy(self, capsys):
+        with (
+            patch(
+                "prefect_submitit.server.cli.discovery.health_check", return_value=True
+            ),
+            patch("prefect_submitit.server.cli.prefect_proc.start") as mock_start,
+        ):
+            main(["start"])
+            mock_start.assert_not_called()
+            assert "already running" in capsys.readouterr().out
+
+    def test_starts_when_not_healthy(self):
+        with (
+            patch(
+                "prefect_submitit.server.cli.discovery.health_check", return_value=False
+            ),
+            patch("prefect_submitit.server.cli.prefect_proc.start", return_value=123),
+        ):
+            main(["start", "--bg"])
+
+    def test_restart_skips_health_check(self):
+        with (
+            patch("prefect_submitit.server.cli.discovery.health_check") as mock_health,
+            patch("prefect_submitit.server.cli.prefect_proc.stop"),
+            patch("prefect_submitit.server.cli.prefect_proc.start", return_value=123),
+        ):
+            main(["start", "--bg", "--restart"])
+            mock_health.assert_not_called()
+
+
 class TestErrorHandling:
     def test_file_not_found_exits(self):
         with (

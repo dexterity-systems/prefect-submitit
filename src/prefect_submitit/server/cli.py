@@ -5,13 +5,17 @@ from __future__ import annotations
 import argparse
 import sys
 
-from prefect_submitit.server import postgres, prefect_proc
+from prefect_submitit.server import discovery, postgres, prefect_proc
 from prefect_submitit.server.config import make_config
 
 
 def _cmd_start(args: argparse.Namespace) -> None:
     """Handle the 'start' subcommand."""
     config = make_config(port=args.port, pg_port=args.pg_port)
+
+    if not args.restart and discovery.health_check(config.api_url):
+        print(f"Server already running and healthy at {config.api_url}")
+        return
 
     if args.restart:
         print("Stopping existing server...")

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import socket
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -30,6 +32,41 @@ class TestDefaultHost:
         host = default_host()
         assert isinstance(host, str)
         assert len(host) > 0
+
+    def test_uses_fqdn_when_resolvable(self):
+        with (
+            patch(
+                "prefect_submitit.server.config.socket.getfqdn",
+                return_value="node01.cluster.local",
+            ),
+            patch("prefect_submitit.server.config.socket.getaddrinfo") as mock_gai,
+        ):
+            result = default_host()
+            assert result == "node01.cluster.local"
+            mock_gai.assert_called_once_with("node01.cluster.local", None)
+
+    def test_falls_back_on_unresolvable_fqdn(self):
+        with (
+            patch(
+                "prefect_submitit.server.config.socket.getfqdn",
+                return_value="bad.ptr.record",
+            ),
+            patch(
+                "prefect_submitit.server.config.socket.getaddrinfo",
+                side_effect=socket.gaierror,
+            ),
+            patch(
+                "prefect_submitit.server.config.socket.gethostname",
+                return_value="node01",
+            ),
+            patch(
+                "prefect_submitit.server.config.socket.gethostbyname",
+                return_value="10.0.0.1",
+            ) as mock_ghbn,
+        ):
+            result = default_host()
+            assert result == "10.0.0.1"
+            mock_ghbn.assert_called_once_with("node01")
 
 
 class TestMakeConfig:

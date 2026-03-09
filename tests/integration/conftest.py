@@ -5,7 +5,6 @@ from __future__ import annotations
 import dataclasses
 import os
 import re
-import socket
 import subprocess
 import time
 import urllib.request
@@ -14,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from prefect_submitit import SlurmTaskRunner
+from prefect_submitit.server.config import default_host
 
 from .helpers import find_free_port
 
@@ -112,16 +112,6 @@ def _wait_for_server(url, timeout=30):
     raise RuntimeError(msg)
 
 
-def _get_routable_hostname() -> str:
-    """Return a hostname or IP that compute nodes can reach."""
-    hostname = socket.getfqdn()
-    try:
-        socket.getaddrinfo(hostname, None)
-        return hostname
-    except socket.gaierror:
-        return socket.gethostbyname(socket.gethostname())
-
-
 @pytest.fixture(scope="session", autouse=True)
 def prefect_server(request, slurm_config):  # noqa: ARG001
     """Start an ephemeral Prefect server for the test session.
@@ -133,7 +123,7 @@ def prefect_server(request, slurm_config):  # noqa: ARG001
         yield None
         return
 
-    hostname = _get_routable_hostname()
+    hostname = default_host()
     port = find_free_port()
     api_url = f"http://{hostname}:{port}/api"
 
