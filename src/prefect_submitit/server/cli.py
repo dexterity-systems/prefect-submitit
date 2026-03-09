@@ -15,7 +15,7 @@ def _cmd_start(args: argparse.Namespace) -> None:
 
     if args.restart:
         print("Stopping existing server...")
-        prefect_proc.stop(config, stop_postgres=True, force=True)
+        prefect_proc.stop(config, force=True)
 
     if not args.sqlite and not (config.pg_data_dir / "PG_VERSION").exists():
         print("Initializing PostgreSQL database...")
@@ -43,11 +43,7 @@ def _cmd_stop(args: argparse.Namespace) -> None:
     """Handle the 'stop' subcommand."""
     config = make_config()
     print("Stopping Prefect server...")
-    prefect_proc.stop(
-        config,
-        stop_postgres=args.all,
-        force=args.force,
-    )
+    prefect_proc.stop(config, force=args.force)
     print("Server stopped.")
 
 
@@ -103,8 +99,7 @@ def main(argv: list[str] | None = None) -> None:
     start_p.add_argument("--pg-port", type=int, default=None, help="PostgreSQL port")
 
     # stop
-    stop_p = sub.add_parser("stop", help="Stop the Prefect server")
-    stop_p.add_argument("--all", action="store_true", help="Also stop PostgreSQL")
+    stop_p = sub.add_parser("stop", help="Stop the Prefect server and PostgreSQL")
     stop_p.add_argument(
         "-f", "--force", action="store_true", help="Force stop with SIGKILL fallback"
     )

@@ -47,14 +47,12 @@ class TestArgParsing:
             main(["stop"])
             args = mock.call_args[0][0]
             assert args.command == "stop"
-            assert args.all is False
             assert args.force is False
 
-    def test_stop_all_flags(self):
+    def test_stop_force(self):
         with patch("prefect_submitit.server.cli._cmd_stop") as mock:
-            main(["stop", "--all", "-f"])
+            main(["stop", "-f"])
             args = mock.call_args[0][0]
-            assert args.all is True
             assert args.force is True
 
     def test_init_db_defaults(self):

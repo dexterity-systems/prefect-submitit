@@ -146,12 +146,13 @@ def start(
     discovery.write_discovery(config, proc.pid, backend)
 
     def _cleanup(signum: int, _frame: object) -> None:
-        discovery.remove_discovery(config)
         proc.terminate()
         try:
             proc.wait(timeout=10)
         except subprocess.TimeoutExpired:
             proc.kill()
+        discovery.remove_discovery(config)
+        postgres.stop(config)
         raise SystemExit(128 + signum)
 
     signal.signal(signal.SIGTERM, _cleanup)
@@ -161,6 +162,7 @@ def start(
         proc.wait()
     finally:
         discovery.remove_discovery(config)
+        postgres.stop(config)
 
     return proc.pid
 
@@ -168,14 +170,12 @@ def start(
 def stop(
     config: ServerConfig,
     *,
-    stop_postgres: bool = False,
     force: bool = False,
 ) -> None:
-    """Stop the Prefect server and optionally PostgreSQL.
+    """Stop the Prefect server and PostgreSQL.
 
     Args:
         config: Server configuration.
-        stop_postgres: If True, also stop PostgreSQL.
         force: If True, use SIGKILL as fallback.
     """
     pids = _find_server_pids()
@@ -183,9 +183,7 @@ def stop(
         _kill_pid(pid, timeout=5.0 if not force else 2.0)
 
     discovery.remove_discovery(config)
-
-    if stop_postgres:
-        postgres.stop(config, force=force)
+    postgres.stop(config, force=force)
 
 
 def status(config: ServerConfig) -> dict | None:
