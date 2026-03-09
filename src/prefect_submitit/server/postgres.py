@@ -227,6 +227,114 @@ def _ensure_database(
         )
 
 
+def _find_pid_on_port(port: int) -> int | None:
+    """Find the PID of a process listening on the given TCP port.
+
+    Args:
+        port: TCP port to check.
+
+    Returns:
+        PID of the listening process, or None if port is free or lsof
+        is unavailable.
+
+    Raises:
+        FileNotFoundError: Re-raised so callers can detect missing lsof.
+    """
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        raise
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    first_line = result.stdout.strip().splitlines()[0]
+    try:
+        return int(first_line)
+    except ValueError:
+        return None
+
+
+def _is_postgres_process(pid: int) -> bool:
+    """Check whether a PID belongs to a PostgreSQL process.
+
+    Args:
+        pid: Process ID to inspect.
+
+    Returns:
+        True if the process command name contains "postgres" or "postmaster".
+    """
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "comm="],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return False
+    comm = result.stdout.strip().lower()
+    return "postgres" in comm or "postmaster" in comm
+
+
+def _kill_orphan_on_port(port: int) -> bool:
+    """Detect and kill an orphan PostgreSQL process holding a port.
+
+    Args:
+        port: TCP port to check.
+
+    Returns:
+        True if an orphan was found and killed, False if port was free.
+
+    Raises:
+        RuntimeError: If the port is occupied by a non-PostgreSQL process,
+            or if lsof is unavailable and the port is in use.
+    """
+    try:
+        pid = _find_pid_on_port(port)
+    except FileNotFoundError:
+        # lsof unavailable — fall back to TCP connect check
+        try:
+            with socket.create_connection(("localhost", port), timeout=1):
+                pass
+        except OSError:
+            return False
+        msg = (
+            f"Port {port} is occupied but lsof is not available to identify "
+            f"the process. Free the port manually and retry."
+        )
+        raise RuntimeError(msg) from None
+
+    if pid is None:
+        return False
+
+    if not _is_postgres_process(pid):
+        msg = f"Port {port} is occupied by PID {pid}, not PostgreSQL"
+        raise RuntimeError(msg)
+
+    # Graceful shutdown
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return True
+
+    # Wait up to 5 seconds for process to exit
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.1)
+
+    # Force kill
+    with contextlib.suppress(ProcessLookupError):
+        os.kill(pid, signal.SIGKILL)
+    return True
+
+
 def _wait_for_pg_ready(
     pg_port: int,
     timeout: float = 10,
@@ -285,6 +393,9 @@ def start(config: ServerConfig) -> int:
     if pid_file.exists() and is_running(config) is None:
         pid_file.unlink()
 
+    # Kill orphan postgres holding our port (e.g. after pid file deletion)
+    _kill_orphan_on_port(config.pg_port)
+
     subprocess.run(
         [
             pg_ctl_bin,
@@ -318,12 +429,16 @@ def stop(config: ServerConfig, *, force: bool = False) -> None:
     """
     pid = is_running(config)
     if pid is None:
+        # Best-effort orphan cleanup; ignore if port is held by non-postgres
+        with contextlib.suppress(RuntimeError):
+            _kill_orphan_on_port(config.pg_port)
         return
 
     pg_ctl_bin = require_binary("pg_ctl")
     result = subprocess.run(
         [pg_ctl_bin, "-D", str(config.pg_data_dir), "stop", "-m", "fast"],
         capture_output=True,
+        check=False,
     )
 
     if result.returncode != 0 and force:
