@@ -89,9 +89,7 @@ class TestBatchParameters:
 class TestBatchPrefectAPI:
     """P2: Batch task run state in Prefect API."""
 
-    def test_batch_task_run_state(
-        self, make_slurm_runner, slurm_jobs, prefect_server
-    ):
+    def test_batch_task_run_state(self, make_slurm_runner, slurm_jobs, prefect_server):
         if not prefect_server:
             pytest.skip("No Prefect server available")
 
@@ -113,8 +111,6 @@ class TestBatchPrefectAPI:
 
         client = get_client(sync_client=True)
         task_runs = client.read_task_runs()
-        matching = [
-            tr for tr in task_runs if str(tr.flow_run_id) == flow_run_id
-        ]
+        matching = [tr for tr in task_runs if str(tr.flow_run_id) == flow_run_id]
         assert len(matching) >= 1
         assert any(tr.state.is_completed() for tr in matching)
