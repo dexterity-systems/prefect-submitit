@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import socket
 
 import pytest
 
@@ -10,6 +11,9 @@ from prefect_submitit.server.config import ServerConfig
 from prefect_submitit.server.postgres import (
     _END_SENTINEL,
     _START_SENTINEL,
+    _find_pid_on_port,
+    _is_postgres_process,
+    _kill_orphan_on_port,
     _write_custom_config,
     is_running,
 )
@@ -86,3 +90,51 @@ class TestIsRunning:
         pid_file = tmp_config.pg_data_dir / "postmaster.pid"
         pid_file.write_text(f"{os.getpid()}\n")
         assert is_running(tmp_config) == os.getpid()
+
+
+def _unused_port() -> int:
+    """Find an unused TCP port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("localhost", 0))
+        return s.getsockname()[1]
+
+
+class TestFindPidOnPort:
+    def test_free_port(self):
+        port = _unused_port()
+        assert _find_pid_on_port(port) is None
+
+    def test_with_listener(self):
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind(("localhost", 0))
+        srv.listen(1)
+        port = srv.getsockname()[1]
+        try:
+            pid = _find_pid_on_port(port)
+            assert pid == os.getpid()
+        finally:
+            srv.close()
+
+
+class TestIsPostgresProcess:
+    def test_false_for_python(self):
+        assert _is_postgres_process(os.getpid()) is False
+
+
+class TestKillOrphanOnPort:
+    def test_free_port(self):
+        port = _unused_port()
+        assert _kill_orphan_on_port(port) is False
+
+    def test_non_postgres_raises(self):
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        srv.bind(("localhost", 0))
+        srv.listen(1)
+        port = srv.getsockname()[1]
+        try:
+            with pytest.raises(RuntimeError, match="not PostgreSQL"):
+                _kill_orphan_on_port(port)
+        finally:
+            srv.close()
