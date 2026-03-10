@@ -68,11 +68,44 @@ SlurmTaskRunner(
     slurm_array_parallelism=100,  # Max concurrent array tasks
     log_folder="slurm_logs",  # Where submitit writes logs
     fail_on_error=True,  # Raise on SLURM job failure
+    poll_interval=2.0,  # Seconds between job status checks
+    max_poll_time=3600,  # Max seconds to poll before timing out
+    max_array_size=1000,  # Override auto-detected max SLURM array size
 )
 ```
 
 Any additional keyword arguments are passed through to submitit (e.g.
 `slurm_gres="gpu:a100:1"`).
+
+## Examples
+
+The `examples/` directory contains Jupyter notebooks that demonstrate each
+feature end-to-end on a real SLURM cluster:
+
+| Notebook | Covers |
+|----------|--------|
+| `01_single_task_submission` | Submitting individual tasks as SLURM jobs |
+| `02_job_arrays_with_map` | `task.map()` with automatic job array chunking |
+| `03_batched_execution` | Grouping items per job with `units_per_worker` |
+| `04_error_handling_and_cancellation` | Failure propagation and job cancellation |
+| `05_local_mode_and_development` | Local execution mode for dev/testing |
+
+To run them: install dependencies, register the Jupyter kernel, and start the
+Prefect server (see [Development](#development) below), then open any notebook
+and select the **Prefect-Submitit** kernel.
+
+## Integration Tests
+
+The test suite includes SLURM integration tests that submit real jobs to verify
+the runner works on your cluster. Use these to validate a new deployment:
+
+```bash
+pixi run -e dev test-slurm
+```
+
+Tests cover single submission, job arrays, batched execution, cancellation,
+failure handling, polling, and environment propagation. They are marked with
+`@pytest.mark.slurm` and skipped unless `--run-slurm` is passed.
 
 ## Local Testing
 
@@ -110,11 +143,31 @@ pixi run prefect-stop    # Stop the server
 ```
 
 The CLI automatically:
-- Initializes PostgreSQL on first run (stored in `.prefect-postgres/`)
+- Initializes PostgreSQL on first run (stored in `~/.prefect-submitit/postgres/`)
 - Picks a UID-based port (range 4200-4999) to avoid conflicts
-- Uses the node's FQDN so SLURM workers on compute nodes can reach it
-- Writes a discovery file to `~/.prefect-submitit/prefect/server.json`
+- Uses the node's FQDN so SLURM workers can reach it (falls back to IP if
+  FQDN is unresolvable)
+- Writes a discovery file to `~/.prefect-submitit/server.json`
 - Tunes connection pool sizes for high-concurrency SLURM workloads
+
+**Direct CLI**
+
+```bash
+prefect-server start [--bg] [--sqlite] [--restart] [--port N] [--pg-port N]
+prefect-server stop [-f]
+prefect-server status
+prefect-server init-db [--reset]
+```
+
+- `--sqlite` uses SQLite instead of PostgreSQL
+- `--restart` stops any existing server before starting
+- `start` is idempotent — skips if the server is already healthy
+
+**Server discovery**
+
+Workers resolve the Prefect API URL in this order: `PREFECT_SUBMITIT_SERVER`
+env var → `PREFECT_API_URL` env var → discovery file (auto-written by
+`prefect-server start`).
 
 ### IDE Setup (VSCode)
 
@@ -143,18 +196,6 @@ In VSCode: open a `.ipynb` file → click "Select Kernel" → choose
 > the cause. Uninstall it — the core Python extension works fine without it.
 > Tracked upstream:
 > [microsoft/vscode-python#25804](https://github.com/microsoft/vscode-python/issues/25804)
-
-### Running Demos
-
-The `examples/` directory contains demo notebooks. After setting up:
-
-```bash
-pixi install               # Install all dependencies
-pixi run install-kernel    # Register Jupyter kernel
-pixi run prefect-start     # Start Prefect server
-```
-
-Then open any notebook in `examples/` and select the **Prefect-Submitit** kernel.
 
 ## License
 
