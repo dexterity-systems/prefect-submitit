@@ -77,6 +77,36 @@ SlurmTaskRunner(
 Any additional keyword arguments are passed through to submitit (e.g.
 `slurm_gres="gpu:a100:1"`).
 
+## Examples
+
+The `examples/` directory contains Jupyter notebooks that demonstrate each
+feature end-to-end on a real SLURM cluster:
+
+| Notebook | Covers |
+|----------|--------|
+| `01_single_task_submission` | Submitting individual tasks as SLURM jobs |
+| `02_job_arrays_with_map` | `task.map()` with automatic job array chunking |
+| `03_batched_execution` | Grouping items per job with `units_per_worker` |
+| `04_error_handling_and_cancellation` | Failure propagation and job cancellation |
+| `05_local_mode_and_development` | Local execution mode for dev/testing |
+
+To run them: install dependencies, register the Jupyter kernel, and start the
+Prefect server (see [Development](#development) below), then open any notebook
+and select the **Prefect-Submitit** kernel.
+
+## Integration Tests
+
+The test suite includes SLURM integration tests that submit real jobs to verify
+the runner works on your cluster. Use these to validate a new deployment:
+
+```bash
+pixi run -e dev test-slurm
+```
+
+Tests cover single submission, job arrays, batched execution, cancellation,
+failure handling, polling, and environment propagation. They are marked with
+`@pytest.mark.slurm` and skipped unless `--run-slurm` is passed.
+
 ## Local Testing
 
 Set the environment variable to skip SLURM entirely:
@@ -166,18 +196,6 @@ In VSCode: open a `.ipynb` file → click "Select Kernel" → choose
 > the cause. Uninstall it — the core Python extension works fine without it.
 > Tracked upstream:
 > [microsoft/vscode-python#25804](https://github.com/microsoft/vscode-python/issues/25804)
-
-### Running Demos
-
-The `examples/` directory contains demo notebooks. After setting up:
-
-```bash
-pixi install               # Install all dependencies
-pixi run install-kernel    # Register Jupyter kernel
-pixi run prefect-start     # Start Prefect server
-```
-
-Then open any notebook in `examples/` and select the **Prefect-Submitit** kernel.
 
 ## License
 

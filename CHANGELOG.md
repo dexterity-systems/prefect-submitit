@@ -35,6 +35,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - README: corrected discovery file and PostgreSQL data directory paths; added
   direct CLI reference, server discovery docs, and missing configuration params
   (`poll_interval`, `max_poll_time`, `max_array_size`).
+- README: added Examples and Integration Tests sections with prominent
+  placement after Configuration.
 
 ### Changed
 
