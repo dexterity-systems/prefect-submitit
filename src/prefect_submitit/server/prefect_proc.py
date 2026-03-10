@@ -18,14 +18,14 @@ if TYPE_CHECKING:
 
 
 def _find_server_pids() -> list[int]:
-    """Find PIDs of running Prefect server processes.
+    """Find PIDs of running Prefect server processes owned by the current user.
 
     Returns:
         List of PIDs.
     """
     try:
         result = subprocess.run(
-            ["pgrep", "-f", "prefect server start"],
+            ["pgrep", "-u", str(os.getuid()), "-f", "prefect server start"],
             capture_output=True,
             text=True,
             check=False,
