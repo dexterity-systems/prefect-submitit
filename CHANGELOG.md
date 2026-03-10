@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-03-10
+
 ### Added
 
 - `prefect-server` CLI for managing a local PostgreSQL-backed Prefect server on
@@ -15,10 +17,15 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - UID-based port allocation (4200–4999) to avoid conflicts on multi-user nodes.
 - Discovery file (`~/.prefect-submitit/server.json`) for cross-node worker
   resolution.
+- Improved SLURM cancellation detection reliability.
+- Reduced default SLURM poll interval from 30s to 5s.
 - Five example notebooks covering single tasks, job arrays, batched execution,
   error handling, and local development mode.
+- Portable SLURM integration test suite.
 - `make_slurm_runner` factory fixture for integration tests with SLURM job naming.
 - Unit test suite for executors, array futures, and server module.
+- CONTRIBUTING.md, CODE_OF_CONDUCT.md, and SECURITY.md community health files.
+- CLAUDE.md contributor guide.
 
 ### Fixed
 
@@ -32,6 +39,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
   already running and healthy.
 - `default_host()` falls back to the short-hostname IP when the FQDN is
   unresolvable.
+- Server PID retrieval now filters by current user for multi-user safety.
+- Detect and kill orphan PostgreSQL processes holding the configured port.
+- Always stop PostgreSQL when stopping Prefect server.
 - README: corrected discovery file and PostgreSQL data directory paths; added
   direct CLI reference, server discovery docs, and missing configuration params
   (`poll_interval`, `max_poll_time`, `max_array_size`).
@@ -40,6 +50,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Enhanced database initialization with error handling and proper shutdown.
 - Improved type safety and fixed mypy/linting issues.
 - Hardened CI pipeline.
 - Updated pyproject.toml dependencies and linting configurations.
@@ -70,7 +81,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Dependabot for GitHub Actions.
 
 [Unreleased]:
-  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.3...HEAD
+  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.4...HEAD
+[0.1.4]:
+  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.3...v0.1.4
 [0.1.3]:
   https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.2...v0.1.3
 [0.1.2]:
