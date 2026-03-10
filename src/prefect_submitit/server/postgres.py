@@ -144,28 +144,29 @@ def init_db(config: ServerConfig, *, reset: bool = False) -> None:
         capture_output=True,
     )
 
-    _wait_for_pg_ready(config.pg_port)
+    try:
+        _wait_for_pg_ready(config.pg_port)
 
-    subprocess.run(
-        [
-            createdb_bin,
-            "-h",
-            "localhost",
-            "-p",
-            str(config.pg_port),
-            "-U",
-            config.pg_user,
-            config.pg_database,
-        ],
-        check=True,
-        capture_output=True,
-    )
-
-    subprocess.run(
-        [pg_ctl_bin, "-D", str(config.pg_data_dir), "stop"],
-        check=True,
-        capture_output=True,
-    )
+        subprocess.run(
+            [
+                createdb_bin,
+                "-h",
+                "localhost",
+                "-p",
+                str(config.pg_port),
+                "-U",
+                config.pg_user,
+                config.pg_database,
+            ],
+            check=True,
+            capture_output=True,
+        )
+    finally:
+        subprocess.run(
+            [pg_ctl_bin, "-D", str(config.pg_data_dir), "stop"],
+            check=True,
+            capture_output=True,
+        )
 
 
 def _ensure_database(
