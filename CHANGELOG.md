@@ -7,6 +7,35 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-03-29
+
+### Added
+
+- PostgreSQL version mismatch detection: compares data directory version against
+  the installed binary and raises a clear error with remediation steps before
+  attempting to start.
+- Prefect version change tracking: records the Prefect version on successful
+  server start and warns on the next startup if the version changed.
+- Background startup failure diagnostics: detects when the Prefect server
+  process dies during startup and surfaces the last 20 lines of the log file
+  in the error message.
+- Timeout vs. crash distinction: when the server doesn't become healthy,
+  the error message now differentiates between "process died" (with log tail)
+  and "process still running" (with monitoring instructions).
+- `prefect_version` field in the discovery file (`server.json`) for
+  `prefect-server status` display.
+
+### Fixed
+
+- Discovery file is no longer written before the server is confirmed healthy
+  in background mode, preventing stale discovery files from persisting after
+  failed startups.
+- `subprocess.CalledProcessError` from PostgreSQL commands (`initdb`,
+  `pg_ctl`, `createdb`) now surfaces stderr in readable error messages
+  instead of raw Python tracebacks.
+- `pg_ctl stop` in the `init_db` cleanup path changed from `check=True`
+  to `check=False` to avoid masking the original error.
+
 ## [0.1.5] - 2026-03-29
 
 ### Fixed
@@ -98,7 +127,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Dependabot for GitHub Actions.
 
 [Unreleased]:
-  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.5...HEAD
+  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.6...HEAD
+[0.1.6]:
+  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.5...v0.1.6
 [0.1.5]:
   https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.4...v0.1.5
 [0.1.4]:

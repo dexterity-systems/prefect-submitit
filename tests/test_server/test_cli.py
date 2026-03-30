@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from unittest.mock import patch
 
 import pytest
@@ -114,6 +115,44 @@ class TestStartIdempotency:
             mock_health.assert_not_called()
 
 
+class TestPrefectVersionWarning:
+    def test_prints_warning_when_version_changed(self, capsys):
+        with (
+            patch(
+                "prefect_submitit.server.cli.prefect_proc._check_prefect_version",
+                return_value="Prefect version changed from 3.5.0 to 3.6.23.",
+            ),
+            patch(
+                "prefect_submitit.server.cli.discovery.health_check",
+                return_value=False,
+            ),
+            patch(
+                "prefect_submitit.server.cli.prefect_proc.start",
+                return_value=123,
+            ),
+        ):
+            main(["start", "--bg"])
+            assert "Prefect version changed" in capsys.readouterr().out
+
+    def test_no_warning_when_version_matches(self, capsys):
+        with (
+            patch(
+                "prefect_submitit.server.cli.prefect_proc._check_prefect_version",
+                return_value=None,
+            ),
+            patch(
+                "prefect_submitit.server.cli.discovery.health_check",
+                return_value=False,
+            ),
+            patch(
+                "prefect_submitit.server.cli.prefect_proc.start",
+                return_value=123,
+            ),
+        ):
+            main(["start", "--bg"])
+            assert "version changed" not in capsys.readouterr().out.lower()
+
+
 class TestErrorHandling:
     def test_file_not_found_exits(self):
         with (
@@ -130,6 +169,30 @@ class TestErrorHandling:
             patch(
                 "prefect_submitit.server.cli._cmd_start",
                 side_effect=RuntimeError("server failed"),
+            ),
+            pytest.raises(SystemExit, match="1"),
+        ):
+            main(["start"])
+
+    def test_called_process_error_exits_with_stderr(self, capsys):
+        exc = subprocess.CalledProcessError(
+            1, ["pg_ctl", "start"], stderr=b"FATAL: wrong version"
+        )
+        with (
+            patch(
+                "prefect_submitit.server.cli._cmd_start",
+                side_effect=exc,
+            ),
+            pytest.raises(SystemExit, match="1"),
+        ):
+            main(["start"])
+
+    def test_called_process_error_without_stderr(self):
+        exc = subprocess.CalledProcessError(1, ["pg_ctl", "start"], stderr=None)
+        with (
+            patch(
+                "prefect_submitit.server.cli._cmd_start",
+                side_effect=exc,
             ),
             pytest.raises(SystemExit, match="1"),
         ):

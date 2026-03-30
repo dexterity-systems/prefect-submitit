@@ -8,7 +8,10 @@ import signal
 import subprocess
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
+
+import prefect
 
 from prefect_submitit.server import discovery, postgres
 from prefect_submitit.server.config import require_binary
@@ -87,6 +90,113 @@ def _kill_pid(pid: int, timeout: float = 5.0) -> None:
         os.kill(pid, signal.SIGKILL)
 
 
+def _get_prefect_version() -> str:
+    """Return the installed Prefect package version."""
+    return prefect.__version__
+
+
+def _check_prefect_version(config: ServerConfig) -> str | None:
+    """Check if the Prefect version changed since last successful start.
+
+    Args:
+        config: Server configuration.
+
+    Returns:
+        Warning message if the version changed, None otherwise.
+    """
+    version_file = config.data_dir / "prefect_version"
+    try:
+        stored = version_file.read_text().strip()
+    except (FileNotFoundError, OSError):
+        return None
+    current = _get_prefect_version()
+    if stored == current:
+        return None
+    return (
+        f"Prefect version changed from {stored} to {current}. "
+        f"Database migrations will run automatically."
+    )
+
+
+def _write_prefect_version(config: ServerConfig) -> None:
+    """Record the current Prefect version in the data directory.
+
+    Args:
+        config: Server configuration.
+    """
+    config.data_dir.mkdir(parents=True, exist_ok=True)
+    (config.data_dir / "prefect_version").write_text(_get_prefect_version() + "\n")
+
+
+def _read_log_tail(log_file: Path, n: int = 20) -> str:
+    """Read the last *n* lines of a log file.
+
+    Args:
+        log_file: Path to the log file.
+        n: Number of trailing lines to return.
+
+    Returns:
+        The tail content, or a placeholder if the file is missing/empty.
+    """
+    try:
+        lines = log_file.read_text().splitlines()
+    except OSError:
+        return "(no log output)"
+    if not lines:
+        return "(no log output)"
+    return "\n".join(lines[-n:])
+
+
+def _wait_for_healthy_or_death(
+    proc: subprocess.Popen,
+    url: str,
+    log_file: Path,
+    timeout: float = 30,
+    poll: float = 1.0,
+) -> None:
+    """Wait for the server to become healthy, detecting early exit.
+
+    Args:
+        proc: The server Popen object.
+        url: Base API URL for health checks.
+        log_file: Path to the server log file.
+        timeout: Maximum wait time in seconds.
+        poll: Time between checks in seconds.
+
+    Raises:
+        RuntimeError: If the server exits or fails to become healthy.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if discovery.health_check(url, timeout=min(poll, 3)):
+            return
+
+        exit_code = proc.poll()
+        if exit_code is not None:
+            tail = _read_log_tail(log_file)
+            msg = (
+                f"Prefect server exited during startup "
+                f"(exit code {exit_code}).\n\n"
+                f"Last log lines from {log_file}:\n{tail}\n\n"
+                f"To fix: check the full log above. If caused by a "
+                f"version change, reinitialize:\n"
+                f"  prefect-server init-db --reset"
+            )
+            raise RuntimeError(msg)
+
+        time.sleep(poll)
+
+    msg = (
+        f"Prefect server not healthy after {timeout}s "
+        f"(PID {proc.pid} still running).\n\n"
+        f"The server may still be starting "
+        f"(e.g. running database migrations).\n"
+        f"Monitor: tail -f {log_file}\n"
+        f"Check later: prefect-server status"
+    )
+    raise RuntimeError(msg)
+
+
 def start(
     config: ServerConfig,
     *,
@@ -139,12 +249,15 @@ def start(
                 start_new_session=True,
             )
 
+        _wait_for_healthy_or_death(proc, config.api_url, log_file)
         discovery.write_discovery(config, proc.pid, backend)
-        discovery.wait_for_healthy(config.api_url)
+        _write_prefect_version(config)
         return proc.pid
+
     proc = subprocess.Popen(cmd, env=env)
 
     discovery.write_discovery(config, proc.pid, backend)
+    _write_prefect_version(config)
 
     def _cleanup(signum: int, _frame: object) -> None:
         proc.terminate()

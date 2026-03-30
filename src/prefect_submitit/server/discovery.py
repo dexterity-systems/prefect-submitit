@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import prefect
+
 from prefect_submitit.server.config import DEFAULT_DATA_DIR
 
 if TYPE_CHECKING:
@@ -38,6 +40,7 @@ def write_discovery(
         "pid": pid,
         "user": getpass.getuser(),
         "backend": backend,
+        "prefect_version": prefect.__version__,
         "started": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     config.discovery_file.parent.mkdir(parents=True, exist_ok=True)

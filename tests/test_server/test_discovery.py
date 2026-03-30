@@ -47,6 +47,7 @@ class TestWriteReadRoundtrip:
         assert data["port"] == 4242
         assert data["pid"] == 12345
         assert data["backend"] == "postgres"
+        assert "prefect_version" in data
         assert "started" in data
         assert "user" in data
 

@@ -21,6 +21,94 @@ _START_SENTINEL = "# --- prefect-submitit custom settings ---"
 _END_SENTINEL = "# --- end prefect-submitit custom settings ---"
 
 
+def _pg_binary_version(pg_ctl_bin: str) -> str | None:
+    """Extract the major version from the installed pg_ctl binary.
+
+    Args:
+        pg_ctl_bin: Path to the pg_ctl binary.
+
+    Returns:
+        Major version string (e.g. ``"16"``), or ``None`` if it cannot
+        be determined.
+    """
+    try:
+        result = subprocess.run(
+            [pg_ctl_bin, "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if result.returncode != 0:
+        return None
+    # Output format: "pg_ctl (PostgreSQL) 16.2"
+    parts = result.stdout.strip().split()
+    for part in parts:
+        if part[0].isdigit():
+            return part.split(".")[0]
+    return None
+
+
+def _check_pg_version(config: ServerConfig, pg_ctl_bin: str) -> None:
+    """Raise if the data directory version doesn't match the binary.
+
+    Args:
+        config: Server configuration.
+        pg_ctl_bin: Path to the pg_ctl binary.
+
+    Raises:
+        RuntimeError: If versions are incompatible.
+    """
+    pg_version_file = config.pg_data_dir / "PG_VERSION"
+    if not pg_version_file.exists():
+        return
+    try:
+        data_version = pg_version_file.read_text().strip()
+    except OSError:
+        return
+    binary_version = _pg_binary_version(pg_ctl_bin)
+    if binary_version is None or data_version == binary_version:
+        return
+    msg = (
+        f"PostgreSQL version mismatch: data directory was initialized "
+        f"with version {data_version}, but the installed binary is "
+        f"version {binary_version}.\n"
+        f"Data directory: {config.pg_data_dir}\n\n"
+        f"To fix, reinitialize the database:\n"
+        f"  prefect-server init-db --reset\n"
+        f"WARNING: this deletes all existing Prefect data."
+    )
+    raise RuntimeError(msg)
+
+
+def _run_pg_cmd(
+    cmd: list[str],
+    *,
+    label: str,
+) -> subprocess.CompletedProcess[bytes]:
+    """Run a PostgreSQL command with clear error reporting.
+
+    Args:
+        cmd: Command and arguments.
+        label: Human-readable label for error messages (e.g. ``"initdb"``).
+
+    Returns:
+        The completed process result.
+
+    Raises:
+        RuntimeError: If the command exits non-zero.
+    """
+    try:
+        return subprocess.run(cmd, check=True, capture_output=True)
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or b"").decode(errors="replace").strip()
+        msg = f"{label} failed (exit code {exc.returncode})."
+        if stderr:
+            msg += f"\n{stderr}"
+        raise RuntimeError(msg) from exc
+
+
 def _write_custom_config(pg_data_dir: os.PathLike, pg_port: int) -> None:
     """Write sentinel-bounded custom config block to postgresql.conf.
 
@@ -105,14 +193,15 @@ def init_db(config: ServerConfig, *, reset: bool = False) -> None:
         _shutil.rmtree(config.pg_data_dir)
 
     if config.pg_data_dir.exists() and (config.pg_data_dir / "PG_VERSION").exists():
-        # Already initialized — just ensure config is current
+        # Already initialized — check version compatibility first
+        _check_pg_version(config, pg_ctl_bin)
         _write_custom_config(config.pg_data_dir, config.pg_port)
         _ensure_database(config, pg_ctl_bin, createdb_bin)
         return
 
     config.pg_data_dir.mkdir(parents=True, exist_ok=True)
 
-    subprocess.run(
+    _run_pg_cmd(
         [
             initdb_bin,
             "-D",
@@ -122,14 +211,13 @@ def init_db(config: ServerConfig, *, reset: bool = False) -> None:
             "--auth=trust",
             "--encoding=UTF8",
         ],
-        check=True,
-        capture_output=True,
+        label="initdb",
     )
 
     _write_custom_config(config.pg_data_dir, config.pg_port)
 
     # Temp start to create the database
-    subprocess.run(
+    _run_pg_cmd(
         [
             pg_ctl_bin,
             "-D",
@@ -140,14 +228,13 @@ def init_db(config: ServerConfig, *, reset: bool = False) -> None:
             f"-p {config.pg_port}",
             "start",
         ],
-        check=True,
-        capture_output=True,
+        label="pg_ctl start",
     )
 
     try:
         _wait_for_pg_ready(config.pg_port)
 
-        subprocess.run(
+        _run_pg_cmd(
             [
                 createdb_bin,
                 "-h",
@@ -158,13 +245,12 @@ def init_db(config: ServerConfig, *, reset: bool = False) -> None:
                 config.pg_user,
                 config.pg_database,
             ],
-            check=True,
-            capture_output=True,
+            label="createdb",
         )
     finally:
         subprocess.run(
             [pg_ctl_bin, "-D", str(config.pg_data_dir), "stop"],
-            check=True,
+            check=False,
             capture_output=True,
         )
 
@@ -186,7 +272,7 @@ def _ensure_database(
     was_stopped = is_running(config) is None
 
     if was_stopped:
-        subprocess.run(
+        _run_pg_cmd(
             [
                 pg_ctl_bin,
                 "-D",
@@ -200,8 +286,7 @@ def _ensure_database(
                 "-t",
                 "10",
             ],
-            check=True,
-            capture_output=True,
+            label="pg_ctl start",
         )
 
     # createdb is idempotent-ish: it fails if DB exists, which we ignore
@@ -389,6 +474,9 @@ def start(config: ServerConfig) -> int:
 
     pg_ctl_bin = require_binary("pg_ctl")
 
+    # Detect incompatible data directory before attempting start
+    _check_pg_version(config, pg_ctl_bin)
+
     # Clean stale pid file
     pid_file = config.pg_data_dir / "postmaster.pid"
     if pid_file.exists() and is_running(config) is None:
@@ -397,7 +485,7 @@ def start(config: ServerConfig) -> int:
     # Kill orphan postgres holding our port (e.g. after pid file deletion)
     _kill_orphan_on_port(config.pg_port)
 
-    subprocess.run(
+    _run_pg_cmd(
         [
             pg_ctl_bin,
             "-D",
@@ -408,8 +496,7 @@ def start(config: ServerConfig) -> int:
             f"-p {config.pg_port}",
             "start",
         ],
-        check=True,
-        capture_output=True,
+        label="pg_ctl start",
     )
 
     _wait_for_pg_ready(config.pg_port)

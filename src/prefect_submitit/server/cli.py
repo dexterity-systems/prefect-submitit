@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 
 from prefect_submitit.server import discovery, postgres, prefect_proc
@@ -24,6 +25,10 @@ def _cmd_start(args: argparse.Namespace) -> None:
     if not args.sqlite and not (config.pg_data_dir / "PG_VERSION").exists():
         print("Initializing PostgreSQL database...")
         postgres.init_db(config)
+
+    version_warning = prefect_proc._check_prefect_version(config)
+    if version_warning:
+        print(f"Note: {version_warning}")
 
     backend = "SQLite" if args.sqlite else "PostgreSQL"
     mode = "background" if args.bg else "foreground"
@@ -128,6 +133,13 @@ def main(argv: list[str] | None = None) -> None:
 
     try:
         dispatch[args.command](args)
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or b"").decode(errors="replace").strip()
+        msg = f"Command failed: {' '.join(exc.cmd)} (exit code {exc.returncode})"
+        if stderr:
+            msg += f"\n{stderr}"
+        print(f"Error: {msg}", file=sys.stderr)
+        sys.exit(1)
     except (FileNotFoundError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
