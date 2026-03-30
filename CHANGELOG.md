@@ -7,7 +7,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.1.6] - 2026-03-29
+## [0.1.5] - 2026-03-30
 
 ### Added
 
@@ -35,11 +35,6 @@ project adheres to [Semantic Versioning](https://semver.org/).
   instead of raw Python tracebacks.
 - `pg_ctl stop` in the `init_db` cleanup path changed from `check=True`
   to `check=False` to avoid masking the original error.
-
-## [0.1.5] - 2026-03-29
-
-### Fixed
-
 - Skip `--gpus_per_node` when value is 0 to avoid GRES errors on strict SLURM clusters
 - Treat SLURM `COMPLETING` state as completed to prevent false state reports
 - Return `Completed` state immediately when job result is already available
@@ -127,9 +122,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Dependabot for GitHub Actions.
 
 [Unreleased]:
-  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.6...HEAD
-[0.1.6]:
-  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.5...v0.1.6
+  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.5...HEAD
 [0.1.5]:
   https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.4...v0.1.5
 [0.1.4]:

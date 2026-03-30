@@ -1,6 +1,6 @@
 [project]
 name = "prefect-submitit"
-version = "0.1.6"
+version = "0.1.5"
 description = "A Prefect 3 TaskRunner that submits tasks to SLURM clusters via submitit"
 readme = "README.md"
 license = "BSD-3-Clause"
