@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -39,6 +38,7 @@ def tmp_config(tmp_path):
 class TestBuildEnv:
     def test_postgres_env(self, tmp_config):
         env = _build_env(tmp_config, sqlite=False)
+        assert env["PREFECT_HOME"] == str(tmp_config.data_dir)
         assert env["PREFECT_SERVER_API_HOST"] == "0.0.0.0"
         assert env["PREFECT_UI_API_URL"] == "http://localhost:4242/api"
         assert env["PREFECT_SERVER_DATABASE_SQLALCHEMY_POOL_SIZE"] == "50"

@@ -7,6 +7,23 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-03-29
+
+### Fixed
+
+- Skip `--gpus_per_node` when value is 0 to avoid GRES errors on strict SLURM clusters
+- Treat SLURM `COMPLETING` state as completed to prevent false state reports
+- Return `Completed` state immediately when job result is already available
+- Set `PREFECT_HOME` in server subprocess to use `config.data_dir`, preventing
+  corruption of the user's default `~/.prefect/` directory
+- Isolate `PREFECT_HOME` in integration test server fixture to avoid polluting
+  the developer's Prefect state
+
+### Changed
+
+- Fix 9 pre-existing ruff lint violations so `pixi run -e dev fmt` passes cleanly
+- Pin `importlib-metadata < 8.8` to avoid compatibility issues
+
 ## [0.1.4] - 2026-03-10
 
 ### Added
@@ -81,7 +98,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Dependabot for GitHub Actions.
 
 [Unreleased]:
-  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.4...HEAD
+  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.5...HEAD
+[0.1.5]:
+  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.4...v0.1.5
 [0.1.4]:
   https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.3...v0.1.4
 [0.1.3]:

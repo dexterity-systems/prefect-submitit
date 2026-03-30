@@ -212,7 +212,7 @@ class TestSlurmBatchedItemFuture:
         good_calls = []
         future._callbacks = [
             lambda f: (_ for _ in ()).throw(RuntimeError("boom")),
-            lambda f: good_calls.append(f),
+            good_calls.append,
         ]
         future._fire_callbacks()
 

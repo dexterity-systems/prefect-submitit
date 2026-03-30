@@ -48,6 +48,7 @@ def _build_env(config: ServerConfig, *, sqlite: bool) -> dict[str, str]:
         Environment dict for subprocess.
     """
     env = os.environ.copy()
+    env["PREFECT_HOME"] = str(config.data_dir)
     env["PREFECT_SERVER_API_HOST"] = "0.0.0.0"
     env["PREFECT_UI_API_URL"] = f"http://localhost:{config.port}/api"
     env["PREFECT_SERVER_DATABASE_SQLALCHEMY_POOL_SIZE"] = "50"
