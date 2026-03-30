@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import subprocess
@@ -202,10 +203,8 @@ class SlurmPrefectFuture(PrefectFuture[Any]):
     def _read_log_nfs_safe(path: Path) -> str:
         """Read a log file after invalidating NFS attribute cache."""
         if not path.exists():
-            try:
-                os.listdir(path.parent)
-            except OSError:
-                pass
+            with contextlib.suppress(OSError):
+                list(path.parent.iterdir())
             if not path.exists():
                 return ""
         try:
@@ -217,7 +216,7 @@ class SlurmPrefectFuture(PrefectFuture[Any]):
         except OSError:
             return ""
         try:
-            with open(path) as f:
+            with path.open() as f:
                 return f.read()
         except OSError:
             return ""

@@ -209,16 +209,16 @@ def make_slurm_runner(request, slurm_config):
     sanitized = re.sub(r"[^a-zA-Z0-9_-]", "_", raw_name)[:50]
 
     def _make(**overrides):
-        defaults = dict(
-            partition=slurm_config.partition,
-            time_limit=slurm_config.time_limit,
-            mem_gb=slurm_config.mem_gb,
-            gpus_per_node=0,
-            poll_interval=2.0,
-            max_poll_time=slurm_config.max_wait + 300,
-            log_folder=str(log_dir),
-            slurm_job_name=sanitized,
-        )
+        defaults = {
+            "partition": slurm_config.partition,
+            "time_limit": slurm_config.time_limit,
+            "mem_gb": slurm_config.mem_gb,
+            "gpus_per_node": 0,
+            "poll_interval": 2.0,
+            "max_poll_time": slurm_config.max_wait + 300,
+            "log_folder": str(log_dir),
+            "slurm_job_name": sanitized,
+        }
         if slurm_config.account:
             defaults["slurm_account"] = slurm_config.account
         if slurm_config.qos:
@@ -280,12 +280,10 @@ def _session_job_cleanup(request, _session_slurm_job_ids):
         return
     if not _session_slurm_job_ids:
         return
-    try:
+    with contextlib.suppress(Exception):
         subprocess.run(
             ["scancel", *_session_slurm_job_ids],
             capture_output=True,
             timeout=10,
             check=False,
         )
-    except Exception:
-        pass

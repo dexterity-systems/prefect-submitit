@@ -49,6 +49,7 @@ platforms = ["linux-64", "osx-arm64"]
 # =============================================================================
 [tool.pixi.dependencies]
 python = "3.12.*"
+importlib-metadata = "<8.8"
 
 # Jupyter kernel (allows registering the env as a Jupyter kernel)
 ipykernel = "*"

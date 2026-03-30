@@ -74,6 +74,17 @@ class TestSlurmPrefectFuture:
 
         assert future.state.is_completed()
 
+    def test_state_completing(self):
+        future = SlurmPrefectFuture(_mock_job(state="COMPLETING"), uuid4(), 1.0, 60.0)
+
+        assert future.state.is_completed()
+
+    def test_state_completed_when_done(self):
+        future = SlurmPrefectFuture(_mock_job(state="RUNNING"), uuid4(), 1.0, 60.0)
+        future._done = True
+
+        assert future.state.is_completed()
+
     @pytest.mark.parametrize(
         "slurm_state",
         ["FAILED", "NODE_FAIL", "TIMEOUT", "CANCELLED", "OUT_OF_MEMORY"],
@@ -210,7 +221,7 @@ class TestSlurmPrefectFuture:
         future = SlurmPrefectFuture(job, uuid4(), 0.01, 60.0)
 
         callback_called = []
-        future.add_done_callback(lambda f: callback_called.append(f))
+        future.add_done_callback(callback_called.append)
         future.wait()
 
         assert len(callback_called) == 1
@@ -223,7 +234,7 @@ class TestSlurmPrefectFuture:
         future.wait()
 
         callback_called = []
-        future.add_done_callback(lambda f: callback_called.append(f))
+        future.add_done_callback(callback_called.append)
 
         assert len(callback_called) == 1
 
@@ -234,7 +245,7 @@ class TestSlurmPrefectFuture:
 
         good_calls = []
         future.add_done_callback(lambda f: (_ for _ in ()).throw(RuntimeError("boom")))
-        future.add_done_callback(lambda f: good_calls.append(f))
+        future.add_done_callback(good_calls.append)
 
         future.wait()
         assert len(good_calls) == 1

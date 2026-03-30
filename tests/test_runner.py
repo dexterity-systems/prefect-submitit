@@ -189,6 +189,19 @@ class TestSlurmTaskRunnerContextManager:
         call_kwargs = mock_executor.update_parameters.call_args[1]
         assert call_kwargs["gpus_per_node"] == 2
 
+    @patch("prefect_submitit.runner.submitit.AutoExecutor")
+    def test_gpus_per_node_zero_omitted(self, mock_executor_class):
+        mock_executor = MagicMock()
+        mock_executor_class.return_value = mock_executor
+
+        runner = SlurmTaskRunner(partition="cpu")
+
+        with runner:
+            pass
+
+        call_kwargs = mock_executor.update_parameters.call_args[1]
+        assert "gpus_per_node" not in call_kwargs
+
 
 # ---------------------------------------------------------------------------
 # Submit

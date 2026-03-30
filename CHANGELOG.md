@@ -7,6 +7,16 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Skip `--gpus_per_node` when value is 0 to avoid GRES errors on strict SLURM clusters
+- Treat SLURM `COMPLETING` state as completed to prevent false state reports
+- Return `Completed` state immediately when job result is already available
+
+### Changed
+
+- Fix 9 pre-existing ruff lint violations so `pixi run -e dev fmt` passes cleanly
+
 ## [0.1.4] - 2026-03-10
 
 ### Added
