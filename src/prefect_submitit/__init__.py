@@ -8,6 +8,7 @@ from prefect_submitit.futures import (
     SlurmBatchedItemFuture,
     SlurmJobFailed,
     SlurmPrefectFuture,
+    SrunPrefectFuture,
 )
 from prefect_submitit.runner import SlurmTaskRunner
 
@@ -18,4 +19,5 @@ __all__ = [
     "SlurmJobFailed",
     "SlurmPrefectFuture",
     "SlurmTaskRunner",
+    "SrunPrefectFuture",
 ]

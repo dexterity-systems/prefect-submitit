@@ -12,10 +12,14 @@ from prefect_submitit.futures.base import (
 from prefect_submitit.futures.batched import (
     SlurmBatchedItemFuture,
 )
+from prefect_submitit.futures.srun import (
+    SrunPrefectFuture,
+)
 
 __all__ = [
     "SlurmArrayPrefectFuture",
     "SlurmBatchedItemFuture",
     "SlurmJobFailed",
     "SlurmPrefectFuture",
+    "SrunPrefectFuture",
 ]
