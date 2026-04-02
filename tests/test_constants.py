@@ -20,13 +20,18 @@ class TestExecutionMode:
     def test_local_value(self):
         assert ExecutionMode.LOCAL == "local"
 
+    def test_srun_value(self):
+        assert ExecutionMode.SRUN == "srun"
+
     def test_is_str_enum(self):
         assert isinstance(ExecutionMode.SLURM, str)
         assert isinstance(ExecutionMode.LOCAL, str)
+        assert isinstance(ExecutionMode.SRUN, str)
 
     def test_from_string(self):
         assert ExecutionMode("slurm") == ExecutionMode.SLURM
         assert ExecutionMode("local") == ExecutionMode.LOCAL
+        assert ExecutionMode("srun") == ExecutionMode.SRUN
 
     def test_invalid_value_raises(self):
         with pytest.raises(ValueError, match="is not a valid ExecutionMode"):
