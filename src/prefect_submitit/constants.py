@@ -13,3 +13,4 @@ class ExecutionMode(StrEnum):
 
     SLURM = "slurm"
     LOCAL = "local"
+    SRUN = "srun"

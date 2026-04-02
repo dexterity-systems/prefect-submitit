@@ -12,6 +12,29 @@ from contextlib import suppress
 from typing import Any
 
 
+def build_slurm_task_name() -> str | None:
+    """Build a Prefect task run name from SLURM environment variables.
+
+    Priority: SLURM_ARRAY_JOB_ID+TASK_ID > SLURM_JOB_ID+STEP_ID > SLURM_JOB_ID.
+
+    Returns:
+        A name like ``slurm-123_4`` (array), ``slurm-123.0`` (step),
+        ``slurm-123`` (plain job), or ``None`` if no SLURM env is set.
+    """
+    array_job = os.environ.get("SLURM_ARRAY_JOB_ID")
+    array_task = os.environ.get("SLURM_ARRAY_TASK_ID")
+    job_id = os.environ.get("SLURM_JOB_ID")
+    step_id = os.environ.get("SLURM_STEP_ID")
+
+    if array_job and array_task:
+        return f"slurm-{array_job}_{array_task}"
+    if job_id and step_id:
+        return f"slurm-{job_id}.{step_id}"
+    if job_id:
+        return f"slurm-{job_id}"
+    return None
+
+
 def run_task_in_slurm(
     *args: Any,
     env: dict[str, str] | None = None,
@@ -28,23 +51,9 @@ def run_task_in_slurm(
     from prefect.context import hydrated_context
     from prefect.task_engine import run_task_async, run_task_sync
 
-    # Update environment variables from submission host
     os.environ.update(env or {})
-
-    # Extract context from kwargs
     context = kwargs.pop("context", None)
-
-    # Build task run name from SLURM job ID for Prefect UI visibility
-    slurm_array_job_id = os.environ.get("SLURM_ARRAY_JOB_ID")
-    slurm_array_task_id = os.environ.get("SLURM_ARRAY_TASK_ID")
-    slurm_job_id = os.environ.get("SLURM_JOB_ID")
-
-    if slurm_array_job_id and slurm_array_task_id:
-        task_run_name = f"slurm-{slurm_array_job_id}_{slurm_array_task_id}"
-    elif slurm_job_id:
-        task_run_name = f"slurm-{slurm_job_id}"
-    else:
-        task_run_name = None
+    task_run_name = build_slurm_task_name()
 
     with hydrated_context(context):
         task = kwargs.get("task")
@@ -110,18 +119,7 @@ def run_batch_in_slurm(
         # Get flow run context for logging
         flow_run_context = FlowRunContext.get()
 
-        # Get SLURM job ID from environment for task naming
-        slurm_array_job_id = os.environ.get("SLURM_ARRAY_JOB_ID")
-        slurm_array_task_id = os.environ.get("SLURM_ARRAY_TASK_ID")
-        slurm_job_id = os.environ.get("SLURM_JOB_ID")
-
-        # Build a descriptive task run name including SLURM job info
-        if slurm_array_job_id and slurm_array_task_id:
-            task_run_name = f"slurm-{slurm_array_job_id}_{slurm_array_task_id}"
-        elif slurm_job_id:
-            task_run_name = f"slurm-{slurm_job_id}"
-        else:
-            task_run_name = None
+        task_run_name = build_slurm_task_name()
 
         # Create a minimal task run for tracking
         # We use the task's create_local_run to register with Prefect

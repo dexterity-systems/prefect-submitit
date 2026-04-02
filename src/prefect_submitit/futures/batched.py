@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from prefect.futures import PrefectFuture
 from prefect.states import State  # type: ignore[attr-defined]
@@ -14,15 +14,18 @@ from prefect_submitit.futures.array import (
     SlurmArrayPrefectFuture,
 )
 
+if TYPE_CHECKING:
+    from prefect_submitit.futures.srun import SrunPrefectFuture
+
 logger = logging.getLogger(__name__)
 
 
 class SlurmBatchedItemFuture(PrefectFuture[Any]):
-    """Future representing one item inside a batched SLURM job."""
+    """Future representing one item inside a batched SLURM or srun job."""
 
     def __init__(
         self,
-        slurm_job_future: SlurmArrayPrefectFuture,
+        slurm_job_future: SlurmArrayPrefectFuture | SrunPrefectFuture,
         item_index_in_job: int,
         global_item_index: int,
         task_run_id: uuid.UUID,
@@ -40,7 +43,7 @@ class SlurmBatchedItemFuture(PrefectFuture[Any]):
         return self._task_run_id
 
     @property
-    def slurm_job_future(self) -> SlurmArrayPrefectFuture:
+    def slurm_job_future(self) -> SlurmArrayPrefectFuture | SrunPrefectFuture:
         return self._slurm_job_future
 
     @property

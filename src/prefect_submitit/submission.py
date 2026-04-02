@@ -28,6 +28,30 @@ from prefect_submitit.futures import (
 from prefect_submitit.utils import get_cluster_max_array_size
 
 
+def build_task_callable(
+    task: Any,
+    task_run_id: uuid.UUID,
+    parameters: dict[str, Any],
+    context: dict[str, Any],
+    env: dict[str, str],
+    dependencies: dict[str, Any] | None = None,
+) -> Callable[..., Any]:
+    """Build a cloudpickle-wrapped callable for a single task submission."""
+    submit_kwargs: dict[str, Any] = {
+        "task": task,
+        "task_run_id": task_run_id,
+        "parameters": parameters,
+        "wait_for": None,
+        "return_type": "state",
+        "dependencies": dependencies,
+        "context": context,
+    }
+    result: Callable[..., Any] = cloudpickle_wrapped_call(
+        run_task_in_slurm, env=env, **submit_kwargs
+    )
+    return result
+
+
 def build_array_callable(
     task: Any,
     index: int,
