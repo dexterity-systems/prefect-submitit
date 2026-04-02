@@ -21,9 +21,11 @@ commands. The short `pixi` form is for user-facing docs only.
 
 ```bash
 pixi install                              # Install dependencies
-pixi run -e dev test                      # Run tests
-pixi run -e dev test-slurm                # Run SLURM integration tests (cluster)
-pixi run -e dev test-slurm-docker         # Run SLURM integration tests (Docker)
+pixi run -e dev test                      # Run unit tests
+pixi run -e dev test-sbatch               # Run sbatch integration tests (cluster)
+pixi run -e dev test-sbatch-docker        # Run sbatch integration tests (Docker)
+pixi run -e dev test-srun                 # Run srun integration tests (cluster, via salloc)
+pixi run -e dev test-srun-docker          # Run srun integration tests (Docker, via salloc)
 pixi run -e dev fmt                       # Format and lint
 pixi run prefect-start                    # Start Prefect server (background)
 pixi run prefect-stop                     # Stop Prefect server

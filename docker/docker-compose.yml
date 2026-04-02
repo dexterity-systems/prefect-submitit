@@ -5,7 +5,7 @@ services:
     hostname: slurm-node
     volumes:
       - ..:/workspace
-      - pixi-env:/workspace/.pixi  # separate from host's macOS .pixi/
+      - pixi-env:/pixi-env  # Linux pixi envs (NOT under /workspace to avoid host clash)
     environment:
       SLURM_TEST_PARTITION: debug
       PREFECT_API_URL: http://localhost:4200/api  # must match --port below

@@ -5,6 +5,10 @@ USER root
 # Install pixi (manages Python, PostgreSQL, and all project deps)
 RUN curl -fsSL https://pixi.sh/install.sh | PIXI_HOME=/usr/local bash
 
+# Store pixi envs on a separate volume (/pixi-env) so they don't
+# clash with the host's macOS .pixi/ from the bind mount.
+RUN pixi config set detached-environments /pixi-env --system
+
 # MariaDB for SLURM accounting storage (sacct support)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \

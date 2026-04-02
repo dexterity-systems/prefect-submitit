@@ -56,8 +56,8 @@ for i in $(seq 1 30); do
     sleep 1
 done
 
-# Fix ownership of the .pixi volume (Docker creates named volumes as root)
-chown docker:docker /workspace/.pixi 2>/dev/null || true
+# Fix ownership of the pixi env volume (Docker creates named volumes as root)
+chown -R docker:docker /pixi-env 2>/dev/null || true
 
 # Drop to non-root user for the main process
 exec runuser -u docker -- "$@"
