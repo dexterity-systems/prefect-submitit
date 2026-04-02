@@ -11,14 +11,21 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- srun execution mode: run Prefect tasks as `srun` steps inside an existing
+  `salloc` allocation via `execution_mode=ExecutionMode.SRUN`.
 - Docker SLURM local dev environment: containerized single-node SLURM cluster
   with full accounting (MariaDB + slurmdbd) for local development on laptops.
 - Pixi tasks for Docker workflow: `slurm-build`, `slurm-up`, `slurm-down`,
-  `slurm-shell`, and `test-slurm-docker`.
+  `slurm-shell`, `test-sbatch-docker`, and `test-srun-docker`.
 - Example script `examples/slurm_submit_and_run.py` for the Docker environment.
 
 ### Fixed
 
+- Task exceptions now wrapped in `SlurmJobFailed` with SLURM job/step ID for
+  both sbatch and srun modes. Previously, raw exceptions leaked through and
+  `raise_on_failure=False` was ignored for task-level failures.
+- Docker pixi environment platform isolation: Linux envs stored at a detached
+  volume path to prevent macOS binary conflicts on bind-mounted workspaces.
 - Stale SLURM state detection caused by submitit's `SlurmInfoWatcher`
   exponential backoff (up to 600s). State queries now force-refresh sacct on
   each poll iteration, eliminating flaky test failures and unreliable job state
