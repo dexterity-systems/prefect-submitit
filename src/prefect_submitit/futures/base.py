@@ -31,6 +31,33 @@ class SlurmJobFailed(Exception):
     """Raised when a SLURM job fails."""
 
 
+def _unwrap_state(state: Any, raise_on_failure: bool, job_label: str) -> Any:
+    """Unwrap a Prefect State, respecting raise_on_failure.
+
+    Args:
+        state: The object to unwrap. If not a Prefect State, returned as-is.
+        raise_on_failure: If True, raise SlurmJobFailed for Failed states.
+        job_label: SLURM job/step identifier for error messages.
+
+    Returns:
+        The unwrapped result value, or None if the state is Failed
+        and raise_on_failure is False.
+
+    Raises:
+        SlurmJobFailed: When state is Failed and raise_on_failure is True.
+    """
+    if not isinstance(state, State):
+        return state
+    if state.is_failed():
+        if not raise_on_failure:
+            return None
+        exc = state.result(raise_on_failure=False)
+        exc_type = type(exc).__name__
+        msg = f"{job_label}: {exc_type}: {exc}"
+        raise SlurmJobFailed(msg) from exc
+    return state.result()
+
+
 class SlurmPrefectFuture(PrefectFuture[Any]):
     """Wrap submitit.Job to implement Prefect's PrefectFuture protocol."""
 
@@ -66,11 +93,16 @@ class SlurmPrefectFuture(PrefectFuture[Any]):
     def is_done(self) -> bool:
         return self._done
 
+    def _get_slurm_state(self) -> str:
+        """Get fresh SLURM job state, bypassing submitit's watcher backoff."""
+        info = self._job.get_info(mode="force")
+        return info.get("State") or "UNKNOWN"
+
     @property
     def state(self) -> State:
         if self.is_done:
             return Completed()
-        slurm_state = self._job.state
+        slurm_state = self._get_slurm_state()
         normalized = slurm_state.rstrip("+")
         if normalized in ("COMPLETED", "COMPLETING"):
             return Completed()
@@ -98,10 +130,10 @@ class SlurmPrefectFuture(PrefectFuture[Any]):
         effective_timeout = timeout if timeout is not None else self._max_poll_time
         start = time.time()
 
-        while not self._job.done():
+        while not self._job.done(force_check=True):
             elapsed = time.time() - start
             if effective_timeout is not None and elapsed > effective_timeout:
-                slurm_state = self._job.state
+                slurm_state = self._get_slurm_state()
                 msg = (
                     f"Job {self.slurm_job_id} did not complete "
                     f"within {effective_timeout:.0f}s "
@@ -109,14 +141,14 @@ class SlurmPrefectFuture(PrefectFuture[Any]):
                 )
                 raise TimeoutError(msg)
 
-            slurm_state = self._job.state
+            slurm_state = self._get_slurm_state()
             if self._is_terminal_failure(slurm_state):
                 self._raise_job_failed(slurm_state)
 
             time.sleep(self._poll_interval)
 
         # Post-loop check: job.done() returned True but may have failed
-        slurm_state = self._job.state
+        slurm_state = self._get_slurm_state()
         if self._is_terminal_failure(slurm_state):
             self._raise_job_failed(slurm_state)
 
@@ -136,10 +168,9 @@ class SlurmPrefectFuture(PrefectFuture[Any]):
         try:
             pickled_result = self._job.result()
             state = cloudpickle.loads(pickled_result)
-            if hasattr(state, "result"):
-                self._result_cache = state.result()
-            else:
-                self._result_cache = state
+            self._result_cache = _unwrap_state(
+                state, raise_on_failure, f"Job {self.slurm_job_id}"
+            )
 
             self._result_retrieved = True
             return self._result_cache

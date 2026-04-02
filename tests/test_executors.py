@@ -14,6 +14,7 @@ import pytest
 
 from prefect_submitit.executors import (
     _item_repr,
+    build_slurm_task_name,
     run_batch_in_slurm,
     run_task_in_slurm,
 )
@@ -56,6 +57,51 @@ class TestItemRepr:
 
     def test_dict(self):
         assert _item_repr({"a": 1}) == "{'a': 1}"
+
+
+class TestBuildSlurmTaskName:
+    """Tests for build_slurm_task_name helper."""
+
+    def test_array_job(self, monkeypatch):
+        monkeypatch.setenv("SLURM_ARRAY_JOB_ID", "100")
+        monkeypatch.setenv("SLURM_ARRAY_TASK_ID", "5")
+        monkeypatch.setenv("SLURM_JOB_ID", "105")
+        assert build_slurm_task_name() == "slurm-100_5"
+
+    def test_step_id(self, monkeypatch):
+        monkeypatch.setenv("SLURM_JOB_ID", "200")
+        monkeypatch.setenv("SLURM_STEP_ID", "3")
+        monkeypatch.delenv("SLURM_ARRAY_JOB_ID", raising=False)
+        monkeypatch.delenv("SLURM_ARRAY_TASK_ID", raising=False)
+        assert build_slurm_task_name() == "slurm-200.3"
+
+    def test_plain_job(self, monkeypatch):
+        monkeypatch.setenv("SLURM_JOB_ID", "300")
+        monkeypatch.delenv("SLURM_ARRAY_JOB_ID", raising=False)
+        monkeypatch.delenv("SLURM_ARRAY_TASK_ID", raising=False)
+        monkeypatch.delenv("SLURM_STEP_ID", raising=False)
+        assert build_slurm_task_name() == "slurm-300"
+
+    def test_no_slurm_env(self, monkeypatch):
+        monkeypatch.delenv("SLURM_JOB_ID", raising=False)
+        monkeypatch.delenv("SLURM_ARRAY_JOB_ID", raising=False)
+        monkeypatch.delenv("SLURM_ARRAY_TASK_ID", raising=False)
+        monkeypatch.delenv("SLURM_STEP_ID", raising=False)
+        assert build_slurm_task_name() is None
+
+    def test_array_takes_priority_over_step(self, monkeypatch):
+        monkeypatch.setenv("SLURM_ARRAY_JOB_ID", "100")
+        monkeypatch.setenv("SLURM_ARRAY_TASK_ID", "5")
+        monkeypatch.setenv("SLURM_JOB_ID", "105")
+        monkeypatch.setenv("SLURM_STEP_ID", "0")
+        assert build_slurm_task_name() == "slurm-100_5"
+
+    def test_step_takes_priority_over_plain_job(self, monkeypatch):
+        monkeypatch.setenv("SLURM_JOB_ID", "200")
+        monkeypatch.setenv("SLURM_STEP_ID", "7")
+        monkeypatch.delenv("SLURM_ARRAY_JOB_ID", raising=False)
+        monkeypatch.delenv("SLURM_ARRAY_TASK_ID", raising=False)
+        assert build_slurm_task_name() == "slurm-200.7"
 
 
 class TestRunTaskInSlurm:

@@ -21,6 +21,7 @@ def _mock_job(job_id: str = "12345", state: str = "PENDING") -> MagicMock:
     job = MagicMock()
     job.job_id = job_id
     job.state = state
+    job.get_info.return_value = {"State": state}
     job.done.return_value = state == "COMPLETED"
     return job
 
@@ -212,6 +213,58 @@ class TestSlurmPrefectFuture:
         future = SlurmPrefectFuture(job, uuid4(), 0.01, 60.0)
 
         assert future.result(raise_on_failure=False) is None
+
+    # --- Failed Prefect state ---
+
+    def test_result_failed_state_raises_slurm_job_failed(self):
+        from prefect.states import Failed
+
+        job = _mock_job(state="COMPLETED")
+        job.done.return_value = True
+        exc = ValueError("bad input")
+        state = Failed(data=exc)
+        job.result.return_value = cloudpickle.dumps(state)
+        future = SlurmPrefectFuture(job, uuid4(), 0.01, 60.0)
+
+        with pytest.raises(SlurmJobFailed, match="bad input"):
+            future.result()
+
+    def test_result_failed_state_no_raise(self):
+        from prefect.states import Failed
+
+        job = _mock_job(state="COMPLETED")
+        job.done.return_value = True
+        state = Failed(data=ValueError("bad input"))
+        job.result.return_value = cloudpickle.dumps(state)
+        future = SlurmPrefectFuture(job, uuid4(), 0.01, 60.0)
+
+        assert future.result(raise_on_failure=False) is None
+
+    def test_result_failed_state_chains_original_exception(self):
+        from prefect.states import Failed
+
+        job = _mock_job(state="COMPLETED")
+        job.done.return_value = True
+        exc = ValueError("bad input")
+        state = Failed(data=exc)
+        job.result.return_value = cloudpickle.dumps(state)
+        future = SlurmPrefectFuture(job, uuid4(), 0.01, 60.0)
+
+        with pytest.raises(SlurmJobFailed) as exc_info:
+            future.result()
+        assert isinstance(exc_info.value.__cause__, ValueError)
+
+    def test_result_failed_state_includes_job_id(self):
+        from prefect.states import Failed
+
+        job = _mock_job(job_id="99999", state="COMPLETED")
+        job.done.return_value = True
+        state = Failed(data=ValueError("bad input"))
+        job.result.return_value = cloudpickle.dumps(state)
+        future = SlurmPrefectFuture(job, uuid4(), 0.01, 60.0)
+
+        with pytest.raises(SlurmJobFailed, match="Job 99999"):
+            future.result()
 
     # --- Callbacks ---
 

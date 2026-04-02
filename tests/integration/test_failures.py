@@ -24,7 +24,7 @@ class TestExceptionPropagation:
             slurm_jobs.append(future.slurm_job_id)
             return future.result()
 
-        with pytest.raises(ValueError, match="test error"):
+        with pytest.raises(SlurmJobFailed, match="test error"):
             compute()
 
 

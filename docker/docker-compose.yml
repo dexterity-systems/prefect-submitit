@@ -1,0 +1,18 @@
+services:
+  slurm:
+    build: .
+    image: prefect-submitit-slurm:dev
+    hostname: slurm-node
+    volumes:
+      - ..:/workspace
+      - pixi-env:/pixi-env  # Linux pixi envs (NOT under /workspace to avoid host clash)
+    environment:
+      SLURM_TEST_PARTITION: debug
+      PREFECT_API_URL: http://localhost:4200/api  # must match --port below
+    ports:
+      - "4200:4200"
+    tty: true
+    stdin_open: true
+
+volumes:
+  pixi-env:

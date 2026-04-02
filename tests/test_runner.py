@@ -85,6 +85,22 @@ class TestSlurmTaskRunnerInit:
         runner = SlurmTaskRunner(max_array_size=42)
         assert runner.max_array_size == 42
 
+    def test_cpus_per_task_default(self):
+        runner = SlurmTaskRunner()
+        assert runner.cpus_per_task == 1
+
+    def test_cpus_per_task_custom(self):
+        runner = SlurmTaskRunner(cpus_per_task=4)
+        assert runner.cpus_per_task == 4
+
+    def test_srun_launch_concurrency_default(self):
+        runner = SlurmTaskRunner()
+        assert runner.srun_launch_concurrency == 128
+
+    def test_srun_launch_concurrency_custom(self):
+        runner = SlurmTaskRunner(srun_launch_concurrency=64)
+        assert runner.srun_launch_concurrency == 64
+
 
 # ---------------------------------------------------------------------------
 # Duplicate
@@ -126,6 +142,14 @@ class TestSlurmTaskRunnerDuplicate:
     def test_preserves_max_array_size(self):
         runner = SlurmTaskRunner(max_array_size=42)
         assert runner.duplicate().max_array_size == 42
+
+    def test_preserves_cpus_per_task(self):
+        runner = SlurmTaskRunner(cpus_per_task=8)
+        assert runner.duplicate().cpus_per_task == 8
+
+    def test_preserves_srun_launch_concurrency(self):
+        runner = SlurmTaskRunner(srun_launch_concurrency=64)
+        assert runner.duplicate().srun_launch_concurrency == 64
 
 
 # ---------------------------------------------------------------------------
@@ -546,9 +570,22 @@ class TestBackend:
         runner = SlurmTaskRunner(execution_mode="slurm")
         assert runner.poll_interval == 5.0
 
+    def test_poll_interval_srun_default(self):
+        runner = SlurmTaskRunner(execution_mode="srun")
+        assert runner.poll_interval == 0.5
+
     def test_poll_interval_explicit_override(self):
         runner = SlurmTaskRunner(execution_mode="local", poll_interval=5.0)
         assert runner.poll_interval == 5.0
+
+    def test_explicit_srun(self):
+        runner = SlurmTaskRunner(execution_mode=ExecutionMode.SRUN)
+        assert runner.execution_mode == ExecutionMode.SRUN
+
+    def test_srun_from_env_var(self, monkeypatch):
+        monkeypatch.setenv("SLURM_TASKRUNNER_BACKEND", "srun")
+        runner = SlurmTaskRunner()
+        assert runner.execution_mode == ExecutionMode.SRUN
 
     @patch("prefect_submitit.runner.submitit.LocalExecutor")
     def test_local_uses_local_executor(self, mock_executor_class):
@@ -699,3 +736,122 @@ class TestLocalBackendIntegration:
 
         for future in futures:
             assert future._poll_interval == 1.0
+
+
+# ---------------------------------------------------------------------------
+# SRUN backend
+# ---------------------------------------------------------------------------
+
+
+class TestSrunBackend:
+    """Tests for SRUN execution mode __enter__/__exit__/submit/map."""
+
+    def test_enter_raises_without_slurm_job_id(self, monkeypatch):
+        monkeypatch.delenv("SLURM_JOB_ID", raising=False)
+        runner = SlurmTaskRunner(execution_mode="srun")
+        with pytest.raises(RuntimeError, match="SLURM_JOB_ID"):
+            runner.__enter__()
+
+    @patch("prefect_submitit.srun.SrunBackend")
+    def test_enter_creates_backend(self, mock_backend_class, monkeypatch):
+        monkeypatch.setenv("SLURM_JOB_ID", "999")
+        runner = SlurmTaskRunner(execution_mode="srun")
+        with runner:
+            assert runner._backend is not None
+            assert runner._entered is True
+
+    @patch("prefect_submitit.srun.SrunBackend")
+    def test_exit_calls_close(self, mock_backend_class, monkeypatch):
+        monkeypatch.setenv("SLURM_JOB_ID", "999")
+        mock_backend = MagicMock()
+        mock_backend_class.return_value = mock_backend
+        runner = SlurmTaskRunner(execution_mode="srun")
+        runner.__enter__()
+        runner.__exit__(None, None, None)
+        mock_backend.close.assert_called_once()
+        assert runner._backend is None
+        assert runner._entered is False
+
+    @patch("prefect_submitit.srun.SrunBackend")
+    def test_enter_warns_on_ignored_params(
+        self, mock_backend_class, monkeypatch, caplog
+    ):
+        monkeypatch.setenv("SLURM_JOB_ID", "999")
+        runner = SlurmTaskRunner(
+            execution_mode="srun",
+            partition="gpu",
+            slurm_array_parallelism=50,
+            max_array_size=42,
+        )
+        with (
+            caplog.at_level(logging.WARNING, logger="prefect.task_runner.slurm"),
+            runner,
+        ):
+            pass
+        assert "SRUN backend ignores" in caplog.text
+        assert "partition='gpu'" in caplog.text
+
+    @patch("prefect.utilities.engine.resolve_inputs_sync")
+    @patch("prefect.context.serialize_context")
+    @patch("prefect.settings.context.get_current_settings")
+    @patch("prefect_submitit.srun.SrunBackend")
+    def test_submit_dispatches_to_backend(
+        self,
+        mock_backend_class,
+        mock_settings,
+        mock_serialize,
+        mock_resolve,
+        monkeypatch,
+    ):
+        monkeypatch.setenv("SLURM_JOB_ID", "999")
+        mock_backend = MagicMock()
+        mock_future = MagicMock()
+        mock_backend.submit_one.return_value = mock_future
+        mock_backend_class.return_value = mock_backend
+
+        mock_serialize.return_value = {}
+        mock_settings.return_value.to_environment_variables.return_value = {}
+        mock_resolve.side_effect = lambda x, **kwargs: x
+
+        runner = SlurmTaskRunner(execution_mode="srun")
+        mock_task = MagicMock()
+        mock_task.name = "test_task"
+
+        with runner:
+            result = runner.submit(mock_task, {"x": 1})
+
+        mock_backend.submit_one.assert_called_once()
+        assert result is mock_future
+
+    @patch("prefect.utilities.engine.resolve_inputs_sync")
+    @patch("prefect.context.serialize_context")
+    @patch("prefect.settings.context.get_current_settings")
+    @patch("prefect_submitit.srun.SrunBackend")
+    def test_map_dispatches_to_backend(
+        self,
+        mock_backend_class,
+        mock_settings,
+        mock_serialize,
+        mock_resolve,
+        monkeypatch,
+    ):
+        monkeypatch.setenv("SLURM_JOB_ID", "999")
+        mock_backend = MagicMock()
+        mock_backend.submit_many.return_value = [MagicMock(), MagicMock(), MagicMock()]
+        mock_backend_class.return_value = mock_backend
+
+        mock_serialize.return_value = {}
+        mock_settings.return_value.to_environment_variables.return_value = {}
+        mock_resolve.side_effect = lambda x, **kwargs: x
+
+        runner = SlurmTaskRunner(execution_mode="srun")
+        mock_task = MagicMock()
+        mock_task.name = "test_task"
+        mock_task.fn = lambda x: x
+        mock_task.isasync = False
+
+        with runner:
+            futures = runner.map(mock_task, {"x": [1, 2, 3]})
+
+        mock_backend.submit_many.assert_called_once()
+        assert len(futures) == 3
