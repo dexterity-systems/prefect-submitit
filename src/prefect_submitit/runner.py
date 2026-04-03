@@ -198,9 +198,14 @@ class SlurmTaskRunner(TaskRunner):
 
             self._backend = SrunBackend(self)
 
-            # Register SIGTERM handler so cleanup runs on job cancellation
-            self._prev_sigterm = signal.getsignal(signal.SIGTERM)
-            signal.signal(signal.SIGTERM, self._sigterm_handler)
+            # Register SIGTERM handler so cleanup runs on job cancellation.
+            # Skip if not on the main thread (signal handlers can only be
+            # registered from the main thread).
+            try:
+                self._prev_sigterm = signal.getsignal(signal.SIGTERM)
+                signal.signal(signal.SIGTERM, self._sigterm_handler)
+            except ValueError:
+                pass  # Not on main thread
 
         return self
 
@@ -224,7 +229,10 @@ class SlurmTaskRunner(TaskRunner):
             self._backend = None
             # Restore previous SIGTERM handler
             if hasattr(self, "_prev_sigterm"):
-                signal.signal(signal.SIGTERM, self._prev_sigterm)
+                try:
+                    signal.signal(signal.SIGTERM, self._prev_sigterm)
+                except ValueError:
+                    pass  # Not on main thread
         self._executor = None
         super().__exit__(*args)
 
