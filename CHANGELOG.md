@@ -7,6 +7,13 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-04-02
+
+### Fixed
+
+- Signal handler registration in srun mode now skips gracefully when not on the
+  main thread, preventing `ValueError` crashes in threaded Prefect deployments.
+
 ## [0.1.6] - 2026-04-02
 
 ### Added
@@ -151,7 +158,9 @@ project adheres to [Semantic Versioning](https://semver.org/).
 - Dependabot for GitHub Actions.
 
 [Unreleased]:
-  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.6...HEAD
+  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.7...HEAD
+[0.1.7]:
+  https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.6...v0.1.7
 [0.1.6]:
   https://github.com/dexterity-systems/prefect-submitit/compare/v0.1.5...v0.1.6
 [0.1.5]:
