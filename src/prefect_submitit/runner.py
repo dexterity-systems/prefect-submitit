@@ -322,16 +322,18 @@ class SlurmTaskRunner(TaskRunner):
 
         task_slurm_kwargs = getattr(task.fn, "_slurm_kwargs", {})
         # update_parameters mutates shared executor state, so this overriding
-		# of slurm_kwargs must be atomic across concurrent submissions.
+        # of slurm_kwargs must be atomic across concurrent submissions.
         with self._submit_lock:
             if task_slurm_kwargs:
                 self._executor.update_parameters(
                     **{**self._base_executor_params, **task_slurm_kwargs}
                 )
-            job = self._executor.submit(wrapped_call)
-            if task_slurm_kwargs:
-                # Restore to runner defaults.
-                self._executor.update_parameters(**self._base_executor_params)
+            try:
+                job = self._executor.submit(wrapped_call)
+            finally:
+                if task_slurm_kwargs:
+                    # Restore to runner defaults.
+                    self._executor.update_parameters(**self._base_executor_params)
 
         max_poll = self.max_poll_time
         if max_poll is None:
