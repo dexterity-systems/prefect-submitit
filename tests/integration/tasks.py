@@ -98,3 +98,11 @@ def return_unpicklable():
         yield 1
 
     return gen()
+
+
+@task
+def get_slurm_cpus_per_task() -> str | None:
+    """Return SLURM_CPUS_PER_TASK from the job environment."""
+    import os
+
+    return os.environ.get("SLURM_CPUS_PER_TASK")

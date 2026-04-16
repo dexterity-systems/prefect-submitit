@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import signal
+import threading
 import uuid
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Self
@@ -113,6 +114,8 @@ class SlurmTaskRunner(TaskRunner):
         self._backend: Any | None = None
         self._entered: bool = False
         self._cached_max_array_size: int | None = None
+        self._base_executor_params: dict[str, Any] = {}
+        self._submit_lock = threading.Lock()
 
     def _parse_time_to_minutes(self, time_str: str) -> int:
         return parse_time_to_minutes(time_str)
@@ -141,9 +144,11 @@ class SlurmTaskRunner(TaskRunner):
                 )
 
             self._executor = submitit.LocalExecutor(folder=self.log_folder)
-            self._executor.update_parameters(
-                timeout_min=self._parse_time_to_minutes(self.time_limit),
-            )
+            local_params: dict[str, Any] = {
+                "timeout_min": self._parse_time_to_minutes(self.time_limit),
+            }
+            self._executor.update_parameters(**local_params)
+            self._base_executor_params = local_params
         elif self.execution_mode == ExecutionMode.SLURM:
             self._executor = submitit.AutoExecutor(folder=f"{self.log_folder}/%j")
             params: dict[str, Any] = {
@@ -167,6 +172,7 @@ class SlurmTaskRunner(TaskRunner):
 
             params.update(self.slurm_kwargs)
             self._executor.update_parameters(**params)
+            self._base_executor_params = params
         elif self.execution_mode == ExecutionMode.SRUN:
             if not os.environ.get("SLURM_JOB_ID"):
                 msg = (
@@ -221,6 +227,18 @@ class SlurmTaskRunner(TaskRunner):
             self._prev_sigterm(signum, frame)
         else:
             raise SystemExit(128 + signum)
+
+    def __getstate__(self) -> dict[str, Any]:
+        # SlurmTaskRunner is serialized as part of the Prefect flow run context for
+        # every task submission. threading.Lock cannot be pickled, so exclude it.
+        state = self.__dict__.copy()
+        del state["_submit_lock"]
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        # Restore all state, then recreate the lock that was excluded in __getstate__.
+        self.__dict__.update(state)
+        self._submit_lock = threading.Lock()
 
     def __exit__(self, *args: Any) -> None:
         self._entered = False
@@ -300,9 +318,30 @@ class SlurmTaskRunner(TaskRunner):
         )
 
         if self.execution_mode == ExecutionMode.SRUN:
+            task_slurm_kwargs = getattr(task.fn, "_slurm_kwargs", {})
+            if task_slurm_kwargs:
+                logger.warning(
+                    "Task '%s' has slurm_kwargs %s, but the runner is in SRUN mode "
+                    "which bypasses submitit — per-task SLURM overrides are ignored.",
+                    task.name,
+                    task_slurm_kwargs,
+                )
             return self._backend.submit_one(wrapped_call, task_run_id)
 
-        job = self._executor.submit(wrapped_call)
+        task_slurm_kwargs = getattr(task.fn, "_slurm_kwargs", {})
+        # update_parameters mutates shared executor state, so this overriding
+        # of slurm_kwargs must be atomic across concurrent submissions.
+        with self._submit_lock:
+            if task_slurm_kwargs:
+                self._executor.update_parameters(
+                    **{**self._base_executor_params, **task_slurm_kwargs}
+                )
+            try:
+                job = self._executor.submit(wrapped_call)
+            finally:
+                if task_slurm_kwargs:
+                    # Restore to runner defaults.
+                    self._executor.update_parameters(**self._base_executor_params)
 
         max_poll = self.max_poll_time
         if max_poll is None:
@@ -435,50 +474,71 @@ class SlurmTaskRunner(TaskRunner):
 
         # -- SRUN mode: dispatch via srun backend ----------------------------
         if self.execution_mode == ExecutionMode.SRUN:
+            task_slurm_kwargs = getattr(task.fn, "_slurm_kwargs", {})
+            if task_slurm_kwargs:
+                logger.warning(
+                    "Task '%s' has slurm_kwargs %s, but the runner is in SRUN mode "
+                    "which bypasses submitit — per-task SLURM overrides are ignored.",
+                    task.name,
+                    task_slurm_kwargs,
+                )
             return self._map_srun(
                 task, iterable_params, static_params, map_length, logger
             )
 
         # -- SLURM / LOCAL mode: dispatch via submitit -----------------------
-        if self.units_per_worker > 1:
-            if len(iterable_params) > 1:
-                msg = (
-                    "Multi-argument map() is not supported with units_per_worker > 1. "
-                    f"Found {len(iterable_params)} iterable parameters: "
-                    f"{list(iterable_params.keys())}. "
-                    "Use units_per_worker=1 for multi-arg map, or pre-zip arguments "
-                    "into single iterable."
+        task_slurm_kwargs = getattr(task.fn, "_slurm_kwargs", {})
+        # update_parameters mutates shared executor state, so this overriding of
+        # slurm_kwargs must be atomic across concurrent submissions (same as submit()).
+        with self._submit_lock:
+            if task_slurm_kwargs:
+                self._executor.update_parameters(
+                    **{**self._base_executor_params, **task_slurm_kwargs}
                 )
-                raise ValueError(msg)
-            param_name = next(iter(iterable_params.keys()))
-            items = iterable_params[param_name]
-            num_batches = (
-                len(items) + self.units_per_worker - 1
-            ) // self.units_per_worker
-            logger.info(
-                "Submitting %s items as %s batched SLURM jobs "
-                "(units_per_worker=%s, partition=%s, parallelism=%s)",
-                len(items),
-                num_batches,
-                self.units_per_worker,
-                self.partition,
-                self.slurm_array_parallelism,
-            )
-            batched_futures = self._submit_batched_job_array(
-                task, items, param_name, static_params
-            )
-            return PrefectFutureList(batched_futures)  # type: ignore[abstract]
+            try:
+                if self.units_per_worker > 1:
+                    if len(iterable_params) > 1:
+                        msg = (
+                            "Multi-argument map() is not supported with units_per_worker > 1. "
+                            f"Found {len(iterable_params)} iterable parameters: "
+                            f"{list(iterable_params.keys())}. "
+                            "Use units_per_worker=1 for multi-arg map, or pre-zip arguments "
+                            "into single iterable."
+                        )
+                        raise ValueError(msg)
+                    param_name = next(iter(iterable_params.keys()))
+                    items = iterable_params[param_name]
+                    num_batches = (
+                        len(items) + self.units_per_worker - 1
+                    ) // self.units_per_worker
+                    logger.info(
+                        "Submitting %s items as %s batched SLURM jobs "
+                        "(units_per_worker=%s, partition=%s, parallelism=%s)",
+                        len(items),
+                        num_batches,
+                        self.units_per_worker,
+                        self.partition,
+                        self.slurm_array_parallelism,
+                    )
+                    futures: list[Any] = self._submit_batched_job_array(
+                        task, items, param_name, static_params
+                    )
+                else:
+                    logger.info(
+                        "Submitting %s tasks as SLURM job array (partition=%s, parallelism=%s)",
+                        map_length,
+                        self.partition,
+                        self.slurm_array_parallelism,
+                    )
+                    futures = self._submit_job_array(
+                        task, iterable_params, static_params, map_length
+                    )
+            finally:
+                if task_slurm_kwargs:
+                    # Restore to runner defaults.
+                    self._executor.update_parameters(**self._base_executor_params)
 
-        logger.info(
-            "Submitting %s tasks as SLURM job array (partition=%s, parallelism=%s)",
-            map_length,
-            self.partition,
-            self.slurm_array_parallelism,
-        )
-        array_futures = self._submit_job_array(
-            task, iterable_params, static_params, map_length
-        )
-        return PrefectFutureList(array_futures)  # type: ignore[abstract]
+        return PrefectFutureList(futures)  # type: ignore[abstract]
 
     def _map_srun(
         self,

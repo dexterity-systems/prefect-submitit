@@ -278,6 +278,54 @@ class TestSlurmTaskRunnerSubmit:
         assert future.slurm_job_id == "12345"
         assert isinstance(future.task_run_id, UUID)
 
+    @patch("prefect.context.serialize_context")
+    @patch("prefect.settings.context.get_current_settings")
+    @patch("prefect.utilities.engine.resolve_inputs_sync")
+    @patch("prefect_submitit.runner.submitit.AutoExecutor")
+    def test_per_task_slurm_kwargs_applied_and_restored(
+        self,
+        mock_executor_class,
+        mock_resolve_inputs,
+        mock_settings,
+        mock_serialize_context,
+    ):
+        mock_job = MagicMock()
+        mock_job.job_id = "12345"
+        mock_executor = MagicMock()
+        mock_executor.submit.return_value = mock_job
+        mock_executor_class.return_value = mock_executor
+
+        mock_resolve_inputs.return_value = {"x": 5}
+        mock_settings.return_value.to_environment_variables.return_value = {}
+        mock_serialize_context.return_value = {}
+
+        def task_fn(x: int) -> int:
+            return x * 2
+
+        task_fn._slurm_kwargs = {"cpus_per_task": 4}
+
+        mock_task = MagicMock()
+        mock_task.fn = task_fn
+        mock_task.name = "test_task"
+        mock_task.isasync = False
+
+        runner = SlurmTaskRunner(cpus_per_task=1)
+
+        with runner:
+            runner.submit(mock_task, {"x": 5})
+
+        update_calls = mock_executor.update_parameters.call_args_list
+        # First call is SlurmTaskRunner.__enter__ (base params)
+        # Second call overrides for task
+        # Third call restores base params
+        assert len(update_calls) == 3
+        original_kwargs = update_calls[0][1]
+        override_kwargs = update_calls[1][1]
+        restore_kwargs = update_calls[2][1]
+        assert original_kwargs["cpus_per_task"] == 1
+        assert override_kwargs["cpus_per_task"] == 4
+        assert restore_kwargs["cpus_per_task"] == 1
+
 
 # ---------------------------------------------------------------------------
 # Map
@@ -357,6 +405,51 @@ class TestSlurmTaskRunnerMap:
         assert len(futures) == 3
         assert isinstance(futures, PrefectFutureList)
         assert all(isinstance(f, SlurmArrayPrefectFuture) for f in futures)
+
+    @patch("prefect.utilities.engine.resolve_inputs_sync")
+    @patch("prefect.context.serialize_context")
+    @patch("prefect.settings.context.get_current_settings")
+    @patch("prefect_submitit.runner.submitit.AutoExecutor")
+    def test_per_task_slurm_kwargs_applied_and_restored(
+        self, mock_executor_class, mock_settings, mock_serialize, mock_resolve
+    ):
+        mock_job = MagicMock()
+        mock_job.job_id = "12345_0"
+        mock_executor = MagicMock()
+        mock_executor.submit.return_value = mock_job
+        mock_executor_class.return_value = mock_executor
+
+        mock_settings.return_value.to_environment_variables.return_value = {}
+        mock_serialize.return_value = {}
+        mock_resolve.side_effect = lambda x, **kwargs: x
+
+        def task_fn(x: int) -> int:
+            return x * 2
+
+        task_fn._slurm_kwargs = {"cpus_per_task": 4}
+
+        mock_task = MagicMock()
+        mock_task.name = "test_task"
+        mock_task.fn = task_fn
+        mock_task.isasync = False
+
+        runner = SlurmTaskRunner(cpus_per_task=1, max_array_size=1000)
+
+        with runner:
+            futures = runner.map(mock_task, {"x": [1, 2, 3]})
+
+        assert len(futures) == 3
+        update_calls = mock_executor.update_parameters.call_args_list
+        # First call is SlurmTaskRunner.__enter__ (base params)
+        # Second call overrides for task
+        # Third call restores base params
+        assert len(update_calls) == 3
+        original_kwargs = update_calls[0][1]
+        override_kwargs = update_calls[1][1]
+        restore_kwargs = update_calls[2][1]
+        assert original_kwargs["cpus_per_task"] == 1
+        assert override_kwargs["cpus_per_task"] == 4
+        assert restore_kwargs["cpus_per_task"] == 1
 
 
 class TestJobArrayChunking:
