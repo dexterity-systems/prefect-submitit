@@ -948,3 +948,91 @@ class TestSrunBackend:
 
         mock_backend.submit_many.assert_called_once()
         assert len(futures) == 3
+
+    @patch("prefect.utilities.engine.resolve_inputs_sync")
+    @patch("prefect.context.serialize_context")
+    @patch("prefect.settings.context.get_current_settings")
+    @patch("prefect_submitit.srun.SrunBackend")
+    def test_submit_warns_on_slurm_kwargs_in_srun(
+        self,
+        mock_backend_class,
+        mock_settings,
+        mock_serialize,
+        mock_resolve,
+        monkeypatch,
+        caplog,
+    ):
+        monkeypatch.setenv("SLURM_JOB_ID", "999")
+        mock_backend = MagicMock()
+        mock_backend_class.return_value = mock_backend
+
+        mock_serialize.return_value = {}
+        mock_settings.return_value.to_environment_variables.return_value = {}
+        mock_resolve.side_effect = lambda x, **kwargs: x
+
+        def task_fn(x: int) -> int:
+            return x
+
+        task_fn._slurm_kwargs = {"cpus_per_task": 4}
+
+        runner = SlurmTaskRunner(execution_mode="srun")
+        mock_task = MagicMock()
+        mock_task.name = "heavy_task"
+        mock_task.fn = task_fn
+
+        with (
+            caplog.at_level(logging.WARNING, logger="prefect.task_runner.slurm"),
+            runner,
+        ):
+            runner.submit(mock_task, {"x": 1})
+
+        assert "slurm_kwargs" in caplog.text
+        assert "SRUN mode" in caplog.text
+        assert "heavy_task" in caplog.text
+        # The override is still ignored: the backend is invoked normally.
+        mock_backend.submit_one.assert_called_once()
+
+    @patch("prefect.utilities.engine.resolve_inputs_sync")
+    @patch("prefect.context.serialize_context")
+    @patch("prefect.settings.context.get_current_settings")
+    @patch("prefect_submitit.srun.SrunBackend")
+    def test_map_warns_on_slurm_kwargs_in_srun(
+        self,
+        mock_backend_class,
+        mock_settings,
+        mock_serialize,
+        mock_resolve,
+        monkeypatch,
+        caplog,
+    ):
+        monkeypatch.setenv("SLURM_JOB_ID", "999")
+        mock_backend = MagicMock()
+        mock_backend.submit_many.return_value = [MagicMock(), MagicMock(), MagicMock()]
+        mock_backend_class.return_value = mock_backend
+
+        mock_serialize.return_value = {}
+        mock_settings.return_value.to_environment_variables.return_value = {}
+        mock_resolve.side_effect = lambda x, **kwargs: x
+
+        def task_fn(x: int) -> int:
+            return x
+
+        task_fn._slurm_kwargs = {"cpus_per_task": 4}
+
+        runner = SlurmTaskRunner(execution_mode="srun")
+        mock_task = MagicMock()
+        mock_task.name = "heavy_task"
+        mock_task.fn = task_fn
+        mock_task.isasync = False
+
+        with (
+            caplog.at_level(logging.WARNING, logger="prefect.task_runner.slurm"),
+            runner,
+        ):
+            futures = runner.map(mock_task, {"x": [1, 2, 3]})
+
+        assert "slurm_kwargs" in caplog.text
+        assert "SRUN mode" in caplog.text
+        assert "heavy_task" in caplog.text
+        mock_backend.submit_many.assert_called_once()
+        assert len(futures) == 3
