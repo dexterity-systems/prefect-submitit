@@ -7,6 +7,15 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Per-task SLURM resource overrides: import `task` from `prefect_submitit` (a
+  drop-in for Prefect's `@task`) and pass `slurm_kwargs` to override executor
+  parameters (e.g. `cpus_per_task`, `timeout_min`, `slurm_nodes`) for a single
+  task. Overrides apply to `.submit()` and `.map()` in `slurm` mode and are
+  restored afterwards; `srun` mode warns and ignores them, `local` mode ignores
+  them.
+
 ## [0.1.7] - 2026-04-02
 
 ### Fixed
