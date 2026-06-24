@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-06-24
+
 ### Added
 
 - Per-task SLURM resource overrides: import `task` from `prefect_submitit` (a
