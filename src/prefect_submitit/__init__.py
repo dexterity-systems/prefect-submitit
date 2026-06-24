@@ -11,6 +11,7 @@ from prefect_submitit.futures import (
     SrunPrefectFuture,
 )
 from prefect_submitit.runner import SlurmTaskRunner
+from prefect_submitit.task import task
 
 __all__ = [
     "ExecutionMode",
@@ -20,4 +21,5 @@ __all__ = [
     "SlurmPrefectFuture",
     "SlurmTaskRunner",
     "SrunPrefectFuture",
+    "task",
 ]

@@ -143,6 +143,47 @@ export SLURM_TASKRUNNER_BACKEND=local
 Additional keyword arguments are passed through to submitit (e.g.
 `slurm_gres="gpu:a100:1"`).
 
+## Per-task resource overrides
+
+The `SlurmTaskRunner` parameters above set defaults for every task in the flow.
+To vary resources for individual tasks, import `task` from `prefect_submitit`
+instead of `prefect` — it is a drop-in replacement for Prefect's `@task` that
+also accepts a `slurm_kwargs` mapping:
+
+```python
+from prefect import flow
+from prefect_submitit import SlurmTaskRunner, task
+
+
+@task
+def light(x: int) -> int:
+    return x  # uses the runner default: cpus_per_task=1
+
+
+@task(slurm_kwargs={"cpus_per_task": 4})
+def heavy(x: int) -> int:
+    return x  # this task only is submitted with 4 CPUs
+
+
+@flow(task_runner=SlurmTaskRunner(partition="cpu", cpus_per_task=1))
+def my_flow():
+    light.submit(1)
+    heavy.submit(2)
+```
+
+The override applies to both `.submit()` and `.map()`, and the runner defaults
+are restored afterwards so other tasks are unaffected.
+
+> **`slurm_kwargs` uses submitit executor parameter names, not the
+> `SlurmTaskRunner` constructor names.** Some names match (`cpus_per_task`,
+> `mem_gb`, `gpus_per_node`); others differ — use `timeout_min=30` (not
+> `time_limit="00:30:00"`) and `slurm_partition="gpu"` (not `partition="gpu"`).
+> This matches the runner's pass-through `**slurm_kwargs` (e.g. `slurm_gres`).
+
+Per-task `slurm_kwargs` only take effect in `slurm` mode. In `srun` mode they
+are ignored with a warning (srun bypasses submitit); in `local` mode they are
+ignored.
+
 ## Examples
 
 The `examples/` directory contains Jupyter notebooks demonstrating each feature

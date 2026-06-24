@@ -67,9 +67,7 @@ postgresql = ">=16"
 [tool.pixi.pypi-dependencies]
 prefect-submitit = { path = ".", editable = true }
 prefect = { version = ">=3.6,<4.0", extras = ["dask"] }
-submitit = "*"  # For SLURM job submission
 asyncpg = "*"  # PostgreSQL async driver for Prefect server
-cloudpickle = "*"  # For serializing Python objects
 
 # =============================================================================
 # DEV FEATURE - Development tools (testing, linting)
