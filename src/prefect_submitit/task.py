@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from typing import Any
+
 from prefect import task as prefect_task
 
 
