@@ -33,7 +33,7 @@ class TestSlurmFailureModes:
 
     def test_invalid_partition_fails_cleanly(self, make_slurm_runner, slurm_jobs):
         runner = make_slurm_runner(
-            partition="nonexistent_partition_xyz",
+            slurm_partition="nonexistent_partition_xyz",
             mem_gb=1,
             max_poll_time=60,
         )

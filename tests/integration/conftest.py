@@ -41,7 +41,7 @@ def pytest_collection_modifyitems(config, items):
 class SlurmTestConfig:
     partition: str
     mem_gb: int
-    time_limit: str
+    timeout_min: int
     account: str | None
     qos: str | None
     max_wait: int
@@ -67,7 +67,7 @@ def slurm_config():
     return SlurmTestConfig(
         partition=partition,
         mem_gb=int(os.environ.get("SLURM_TEST_MEM_GB", "1")),
-        time_limit=os.environ.get("SLURM_TEST_TIME_LIMIT", "00:05:00"),
+        timeout_min=int(os.environ.get("SLURM_TEST_TIMEOUT_MIN", "5")),
         account=os.environ.get("SLURM_TEST_ACCOUNT"),
         qos=os.environ.get("SLURM_TEST_QOS"),
         max_wait=int(os.environ.get("SLURM_TEST_MAX_WAIT", "300")),
@@ -210,8 +210,8 @@ def make_slurm_runner(request, slurm_config):
 
     def _make(**overrides):
         defaults = {
-            "partition": slurm_config.partition,
-            "time_limit": slurm_config.time_limit,
+            "slurm_partition": slurm_config.partition,
+            "timeout_min": slurm_config.timeout_min,
             "mem_gb": slurm_config.mem_gb,
             "gpus_per_node": 0,
             "poll_interval": 2.0,

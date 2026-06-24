@@ -32,8 +32,8 @@ class TestSlurmTaskRunnerInit:
     def test_defaults(self):
         runner = SlurmTaskRunner()
 
-        assert runner.partition == "cpu"
-        assert runner.time_limit == "01:00:00"
+        assert runner.slurm_partition == "cpu"
+        assert runner.timeout_min == 60
         assert runner.mem_gb == 4
         assert runner.gpus_per_node == 0
         assert runner.slurm_array_parallelism == 1000
@@ -46,8 +46,8 @@ class TestSlurmTaskRunnerInit:
 
     def test_custom_parameters(self):
         runner = SlurmTaskRunner(
-            partition="gpu",
-            time_limit="02:30:00",
+            slurm_partition="gpu",
+            timeout_min=150,
             mem_gb=16,
             gpus_per_node=2,
             slurm_array_parallelism=50,
@@ -56,8 +56,8 @@ class TestSlurmTaskRunnerInit:
             constraint="a100",
         )
 
-        assert runner.partition == "gpu"
-        assert runner.time_limit == "02:30:00"
+        assert runner.slurm_partition == "gpu"
+        assert runner.timeout_min == 150
         assert runner.mem_gb == 16
         assert runner.gpus_per_node == 2
         assert runner.slurm_array_parallelism == 50
@@ -112,16 +112,16 @@ class TestSlurmTaskRunnerDuplicate:
 
     def test_creates_identical_copy(self):
         original = SlurmTaskRunner(
-            partition="gpu",
-            time_limit="04:00:00",
+            slurm_partition="gpu",
+            timeout_min=240,
             mem_gb=32,
             gpus_per_node=4,
             constraint="v100",
         )
         duplicate = original.duplicate()
 
-        assert duplicate.partition == original.partition
-        assert duplicate.time_limit == original.time_limit
+        assert duplicate.slurm_partition == original.slurm_partition
+        assert duplicate.timeout_min == original.timeout_min
         assert duplicate.mem_gb == original.mem_gb
         assert duplicate.gpus_per_node == original.gpus_per_node
         assert duplicate.slurm_kwargs == original.slurm_kwargs
@@ -165,7 +165,7 @@ class TestSlurmTaskRunnerContextManager:
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
 
-        runner = SlurmTaskRunner(partition="gpu", time_limit="02:00:00", mem_gb=16)
+        runner = SlurmTaskRunner(slurm_partition="gpu", timeout_min=120, mem_gb=16)
 
         with runner as r:
             assert r is runner
@@ -188,7 +188,7 @@ class TestSlurmTaskRunnerContextManager:
         mock_executor_class.return_value = mock_executor
 
         runner = SlurmTaskRunner(
-            partition="gpu",
+            slurm_partition="gpu",
             gpus_per_node=1,
             slurm_gres="gpu:a4000:1",
         )
@@ -205,7 +205,7 @@ class TestSlurmTaskRunnerContextManager:
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
 
-        runner = SlurmTaskRunner(partition="gpu", gpus_per_node=2)
+        runner = SlurmTaskRunner(slurm_partition="gpu", gpus_per_node=2)
 
         with runner:
             pass
@@ -218,7 +218,7 @@ class TestSlurmTaskRunnerContextManager:
         mock_executor = MagicMock()
         mock_executor_class.return_value = mock_executor
 
-        runner = SlurmTaskRunner(partition="cpu")
+        runner = SlurmTaskRunner(slurm_partition="cpu")
 
         with runner:
             pass
@@ -702,7 +702,7 @@ class TestBackend:
 
         runner = SlurmTaskRunner(
             execution_mode="local",
-            partition="gpu",
+            slurm_partition="gpu",
             mem_gb=16,
             gpus_per_node=2,
             slurm_array_parallelism=50,
@@ -716,7 +716,7 @@ class TestBackend:
             pass
 
         assert "Local backend ignores SLURM parameters" in caplog.text
-        assert "partition='gpu'" in caplog.text
+        assert "slurm_partition='gpu'" in caplog.text
         assert "mem_gb=16" in caplog.text
         assert "gpus_per_node=2" in caplog.text
         assert "slurm_array_parallelism=50" in caplog.text
@@ -872,7 +872,7 @@ class TestSrunBackend:
         monkeypatch.setenv("SLURM_JOB_ID", "999")
         runner = SlurmTaskRunner(
             execution_mode="srun",
-            partition="gpu",
+            slurm_partition="gpu",
             slurm_array_parallelism=50,
             max_array_size=42,
         )
@@ -882,7 +882,7 @@ class TestSrunBackend:
         ):
             pass
         assert "SRUN backend ignores" in caplog.text
-        assert "partition='gpu'" in caplog.text
+        assert "slurm_partition='gpu'" in caplog.text
 
     @patch("prefect.utilities.engine.resolve_inputs_sync")
     @patch("prefect.context.serialize_context")

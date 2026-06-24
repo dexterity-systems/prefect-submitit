@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import subprocess
@@ -12,6 +13,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import cloudpickle
+
+from prefect_submitit.constants import DEFAULT_POLL_TIME_MULTIPLIER
 from prefect_submitit.futures.srun import SrunPrefectFuture
 
 if TYPE_CHECKING:
@@ -55,10 +59,8 @@ class SrunBackend:
         job_folder.mkdir(parents=True, exist_ok=True)
 
         # Serialize with cloudpickle to handle closures and lambdas
-        import cloudpickle
-
         job_path = job_folder / "job.pkl"
-        with open(job_path, "wb") as f:
+        with job_path.open("wb") as f:
             cloudpickle.dump(wrapped_call, f)
 
         # Launch
@@ -83,14 +85,7 @@ class SrunBackend:
 
         max_poll = self._runner.max_poll_time
         if max_poll is None:
-            from prefect_submitit.constants import DEFAULT_POLL_TIME_MULTIPLIER
-            from prefect_submitit.utils import parse_time_to_minutes
-
-            max_poll = (
-                parse_time_to_minutes(self._runner.time_limit)
-                * 60
-                * DEFAULT_POLL_TIME_MULTIPLIER
-            )
+            max_poll = self._runner.timeout_min * 60 * DEFAULT_POLL_TIME_MULTIPLIER
 
         return SrunPrefectFuture(
             process=proc,
@@ -109,7 +104,7 @@ class SrunBackend:
     ) -> list[SrunPrefectFuture]:
         """Submit multiple callables, respecting concurrency limits."""
         futures = []
-        for call, trid in zip(wrapped_calls, task_run_ids):
+        for call, trid in zip(wrapped_calls, task_run_ids, strict=True):
             futures.append(self.submit_one(call, trid))
         return futures
 
@@ -122,10 +117,8 @@ class SrunBackend:
 
         logger.info("Terminating %d active srun processes", len(alive))
         for proc in alive:
-            try:
+            with contextlib.suppress(OSError):
                 proc.terminate()
-            except OSError:
-                pass
 
         deadline = time.monotonic() + 10.0
         for proc in alive:
@@ -157,8 +150,8 @@ class SrunBackend:
         if runner.cpus_per_task > 0:
             cmd.extend(["--cpus-per-task", str(runner.cpus_per_task)])
 
-        if runner.time_limit:
-            cmd.extend(["--time", runner.time_limit])
+        if runner.timeout_min:
+            cmd.extend(["--time", str(runner.timeout_min)])
 
         cmd.extend(
             [sys.executable, "-u", "-m", "prefect_submitit.srun_worker", job_folder]

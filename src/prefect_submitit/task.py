@@ -16,9 +16,9 @@ def task(
     this task only. All other Prefect task options are forwarded to @task.
 
     Args:
-        slurm_kwargs: SLURM parameters to override.
-            These are submitit executor parameters, not SlurmTaskRunner parameters
-            (e.g. use timeout_min=1, not time_limit="00:01:00").
+        slurm_kwargs: submitit executor parameters to override for this task
+            (e.g. cpus_per_task, timeout_min, slurm_nodes). These use the same
+            names as the SlurmTaskRunner constructor.
         **prefect_kwargs: Forwarded to Prefect's @task decorator.
 
     Example:

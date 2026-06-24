@@ -55,7 +55,7 @@ def add(x: int, y: int) -> int:
     return x + y
 
 
-@flow(task_runner=SlurmTaskRunner(partition="cpu", time_limit="00:10:00"))
+@flow(task_runner=SlurmTaskRunner(slurm_partition="cpu", timeout_min=10))
 def my_flow():
     # Single task
     future = add.submit(1, 2)
@@ -88,7 +88,7 @@ Each `.submit()` becomes a SLURM job via `sbatch`. Each `.map()` becomes a job
 array with automatic chunking when the array exceeds cluster limits.
 
 ```python
-SlurmTaskRunner(execution_mode="slurm", partition="gpu", gpus_per_node=1)
+SlurmTaskRunner(execution_mode="slurm", slurm_partition="gpu", gpus_per_node=1)
 ```
 
 ### srun
@@ -125,8 +125,8 @@ export SLURM_TASKRUNNER_BACKEND=local
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `partition` | `"cpu"` | SLURM partition |
-| `time_limit` | `"01:00:00"` | Wall time (HH:MM:SS) |
+| `slurm_partition` | `"cpu"` | SLURM partition |
+| `timeout_min` | `60` | Wall-clock limit (minutes) |
 | `mem_gb` | `4` | Memory per job in GB |
 | `gpus_per_node` | `0` | GPUs per job |
 | `cpus_per_task` | `1` | CPUs per task |
@@ -134,7 +134,7 @@ export SLURM_TASKRUNNER_BACKEND=local
 | `slurm_array_parallelism` | `1000` | Max concurrent array tasks |
 | `execution_mode` | `None` | `"slurm"`, `"srun"`, or `"local"`. Falls back to `SLURM_TASKRUNNER_BACKEND` env var, then `"slurm"` |
 | `poll_interval` | mode-dependent | Seconds between status checks (slurm=5.0, srun=0.5, local=1.0) |
-| `max_poll_time` | `None` | Max seconds to poll before timing out. Default: time_limit × 2 |
+| `max_poll_time` | `None` | Max seconds to poll before timing out. Default: 2× the wall-clock limit |
 | `log_folder` | `"slurm_logs"` | Directory for submitit logs |
 | `fail_on_error` | `True` | Raise on SLURM job failure |
 | `max_array_size` | `None` | Override auto-detected cluster MaxArraySize |
@@ -165,7 +165,7 @@ def heavy(x: int) -> int:
     return x  # this task only is submitted with 4 CPUs
 
 
-@flow(task_runner=SlurmTaskRunner(partition="cpu", cpus_per_task=1))
+@flow(task_runner=SlurmTaskRunner(slurm_partition="cpu", cpus_per_task=1))
 def my_flow():
     light.submit(1)
     heavy.submit(2)
@@ -174,11 +174,10 @@ def my_flow():
 The override applies to both `.submit()` and `.map()`, and the runner defaults
 are restored afterwards so other tasks are unaffected.
 
-> **`slurm_kwargs` uses submitit executor parameter names, not the
-> `SlurmTaskRunner` constructor names.** Some names match (`cpus_per_task`,
-> `mem_gb`, `gpus_per_node`); others differ — use `timeout_min=30` (not
-> `time_limit="00:30:00"`) and `slurm_partition="gpu"` (not `partition="gpu"`).
-> This matches the runner's pass-through `**slurm_kwargs` (e.g. `slurm_gres`).
+> `slurm_kwargs` accepts submitit executor parameter names — the same names as
+> the `SlurmTaskRunner` constructor (`slurm_partition`, `timeout_min`, `mem_gb`,
+> `cpus_per_task`, `gpus_per_node`), plus any other submitit parameter (e.g.
+> `slurm_nodes`, `slurm_gres`).
 
 Per-task `slurm_kwargs` only take effect in `slurm` mode. In `srun` mode they
 are ignored with a warning (srun bypasses submitit); in `local` mode they are

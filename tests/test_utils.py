@@ -13,31 +13,9 @@ import pytest
 from prefect_submitit.constants import DEFAULT_MAX_ARRAY_SIZE, ExecutionMode
 from prefect_submitit.utils import (
     get_cluster_max_array_size,
-    parse_time_to_minutes,
     partition_parameters,
     validate_iterable_lengths,
 )
-
-
-class TestParseTimeToMinutes:
-    """Tests for parse_time_to_minutes."""
-
-    def test_hhmmss_format(self):
-        assert parse_time_to_minutes("01:30:00") == 90
-        assert parse_time_to_minutes("02:00:00") == 120
-        assert parse_time_to_minutes("00:10:30") == 10
-
-    def test_mmss_format(self):
-        assert parse_time_to_minutes("30:00") == 30
-        assert parse_time_to_minutes("10:30") == 10
-
-    def test_plain_minutes(self):
-        assert parse_time_to_minutes("60") == 60
-        assert parse_time_to_minutes("0") == 0
-
-    def test_seconds_truncated(self):
-        assert parse_time_to_minutes("00:00:59") == 0
-        assert parse_time_to_minutes("00:01:59") == 1
 
 
 class TestPartitionParameters:

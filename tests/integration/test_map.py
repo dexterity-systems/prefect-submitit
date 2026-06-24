@@ -6,6 +6,7 @@ import pytest
 from prefect import flow
 from prefect.client.orchestration import get_client
 
+from prefect_submitit.futures import SlurmJobFailed
 from tests.integration.conftest import poll_for_task_runs
 from tests.integration.tasks import add, conditional_fail, identity
 
@@ -85,7 +86,7 @@ class TestMapFailures:
             for f in futures:
                 try:
                     results.append(f.result())
-                except ValueError as e:
+                except SlurmJobFailed as e:
                     results.append(str(e))
             return results
 

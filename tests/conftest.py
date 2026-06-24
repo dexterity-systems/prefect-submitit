@@ -32,7 +32,6 @@ def mock_runner():
     runner.logger = MagicMock()
     runner.poll_interval = 5.0
     runner.max_poll_time = None
-    runner.time_limit = "01:00:00"
-    runner._parse_time_to_minutes.return_value = 60
+    runner.timeout_min = 60
     runner.fail_on_error = True
     return runner
