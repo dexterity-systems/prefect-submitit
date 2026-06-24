@@ -16,6 +16,18 @@ project adheres to [Semantic Versioning](https://semver.org/).
   restored afterwards; `srun` mode warns and ignores them, `local` mode ignores
   them.
 
+### Changed
+
+- **Breaking:** `SlurmTaskRunner` constructor parameters now use submitit's
+  executor names: `partition` → `slurm_partition`, and `time_limit`
+  (`"HH:MM:SS"` string) → `timeout_min` (integer minutes). The runner and
+  per-task `slurm_kwargs` now share one set of names.
+
+### Removed
+
+- The `parse_time_to_minutes` utility, no longer needed now that the wall-clock
+  limit is given directly in minutes.
+
 ## [0.1.7] - 2026-04-02
 
 ### Fixed

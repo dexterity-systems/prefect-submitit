@@ -14,16 +14,6 @@ from prefect_submitit.constants import (
 )
 
 
-def parse_time_to_minutes(time_str: str) -> int:
-    """Parse HH:MM:SS or MM:SS or MM to minutes."""
-    parts = time_str.split(":")
-    if len(parts) == 3:
-        return int(parts[0]) * 60 + int(parts[1]) + int(parts[2]) // 60
-    if len(parts) == 2:
-        return int(parts[0]) + int(parts[1]) // 60
-    return int(parts[0])
-
-
 def partition_parameters(
     parameters: dict[str, Any],
 ) -> tuple[dict[str, list[Any]], dict[str, Any]]:

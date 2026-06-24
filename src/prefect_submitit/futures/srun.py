@@ -134,7 +134,7 @@ class SrunPrefectFuture(PrefectFuture[Any]):
                 raise SlurmJobFailed(msg)
             return None
 
-        with open(result_path, "rb") as f:
+        with result_path.open("rb") as f:
             envelope = pickle.load(f)
 
         if envelope["status"] == "error":

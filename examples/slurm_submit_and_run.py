@@ -26,7 +26,7 @@ def add(a: int, b: int) -> int:
 @flow(
     task_runner=SlurmTaskRunner(
         execution_mode="slurm",
-        partition=PARTITION,
+        slurm_partition=PARTITION,
         slurm_name="smoke_test",
     )
 )

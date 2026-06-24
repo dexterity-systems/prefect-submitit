@@ -133,9 +133,7 @@ def submit_batch_array_chunk(
 
     array_job_id = jobs[0].job_id.split("_")[0] if jobs else ""
     max_poll = runner.max_poll_time or (
-        runner._parse_time_to_minutes(runner.time_limit)
-        * 60
-        * DEFAULT_POLL_TIME_MULTIPLIER
+        runner.timeout_min * 60 * DEFAULT_POLL_TIME_MULTIPLIER
     )
     return [
         SlurmArrayPrefectFuture(

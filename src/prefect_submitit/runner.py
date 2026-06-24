@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 import threading
@@ -41,7 +42,6 @@ from prefect_submitit.submission import (
 )
 from prefect_submitit.utils import (
     get_cluster_max_array_size,
-    parse_time_to_minutes,
     partition_parameters,
     validate_iterable_lengths,
 )
@@ -55,8 +55,8 @@ class SlurmTaskRunner(TaskRunner):
 
     def __init__(
         self,
-        partition: str = "cpu",
-        time_limit: str = "01:00:00",
+        slurm_partition: str = "cpu",
+        timeout_min: int = 60,
         mem_gb: int = 4,
         gpus_per_node: int = 0,
         cpus_per_task: int = 1,
@@ -87,8 +87,8 @@ class SlurmTaskRunner(TaskRunner):
             raise ValueError(msg)
 
         self.execution_mode: ExecutionMode = execution_mode
-        self.partition = partition
-        self.time_limit = time_limit
+        self.slurm_partition = slurm_partition
+        self.timeout_min = timeout_min
         self.mem_gb = mem_gb
         self.gpus_per_node = gpus_per_node
         self.cpus_per_task = cpus_per_task
@@ -117,16 +117,13 @@ class SlurmTaskRunner(TaskRunner):
         self._base_executor_params: dict[str, Any] = {}
         self._submit_lock = threading.Lock()
 
-    def _parse_time_to_minutes(self, time_str: str) -> int:
-        return parse_time_to_minutes(time_str)
-
     def __enter__(self) -> Self:
         super().__enter__()
         self._entered = True
         if self.execution_mode == ExecutionMode.LOCAL:
             ignored_params = []
-            if self.partition != "cpu":
-                ignored_params.append(f"partition={self.partition!r}")
+            if self.slurm_partition != "cpu":
+                ignored_params.append(f"slurm_partition={self.slurm_partition!r}")
             if self.mem_gb != 4:
                 ignored_params.append(f"mem_gb={self.mem_gb}")
             if self.gpus_per_node != 0:
@@ -145,15 +142,15 @@ class SlurmTaskRunner(TaskRunner):
 
             self._executor = submitit.LocalExecutor(folder=self.log_folder)
             local_params: dict[str, Any] = {
-                "timeout_min": self._parse_time_to_minutes(self.time_limit),
+                "timeout_min": self.timeout_min,
             }
             self._executor.update_parameters(**local_params)
             self._base_executor_params = local_params
         elif self.execution_mode == ExecutionMode.SLURM:
             self._executor = submitit.AutoExecutor(folder=f"{self.log_folder}/%j")
             params: dict[str, Any] = {
-                "slurm_partition": self.partition,
-                "timeout_min": self._parse_time_to_minutes(self.time_limit),
+                "slurm_partition": self.slurm_partition,
+                "timeout_min": self.timeout_min,
                 "mem_gb": self.mem_gb,
                 "cpus_per_task": self.cpus_per_task,
                 "slurm_array_parallelism": self.slurm_array_parallelism,
@@ -182,8 +179,8 @@ class SlurmTaskRunner(TaskRunner):
                 raise RuntimeError(msg)
 
             ignored_params = []
-            if self.partition != "cpu":
-                ignored_params.append(f"partition={self.partition!r}")
+            if self.slurm_partition != "cpu":
+                ignored_params.append(f"slurm_partition={self.slurm_partition!r}")
             if self.slurm_array_parallelism != 1000:
                 ignored_params.append(
                     f"slurm_array_parallelism={self.slurm_array_parallelism}"
@@ -200,7 +197,7 @@ class SlurmTaskRunner(TaskRunner):
                     ", ".join(ignored_params),
                 )
 
-            from prefect_submitit.srun import SrunBackend
+            from prefect_submitit.srun import SrunBackend  # noqa: PLC0415
 
             self._backend = SrunBackend(self)
 
@@ -247,17 +244,16 @@ class SlurmTaskRunner(TaskRunner):
             self._backend = None
             # Restore previous SIGTERM handler
             if hasattr(self, "_prev_sigterm"):
-                try:
+                # Restoring the handler fails off the main thread; ignore.
+                with contextlib.suppress(ValueError):
                     signal.signal(signal.SIGTERM, self._prev_sigterm)
-                except ValueError:
-                    pass  # Not on main thread
         self._executor = None
         super().__exit__(*args)
 
     def duplicate(self) -> Self:
         return SlurmTaskRunner(  # type: ignore[return-value]
-            partition=self.partition,
-            time_limit=self.time_limit,
+            slurm_partition=self.slurm_partition,
+            timeout_min=self.timeout_min,
             mem_gb=self.mem_gb,
             gpus_per_node=self.gpus_per_node,
             cpus_per_task=self.cpus_per_task,
@@ -300,7 +296,7 @@ class SlurmTaskRunner(TaskRunner):
             logger.debug(
                 "Submitting task %s to SLURM (partition=%s)...",
                 task.name,
-                self.partition,
+                self.slurm_partition,
             )
 
         context = serialize_context()
@@ -345,11 +341,7 @@ class SlurmTaskRunner(TaskRunner):
 
         max_poll = self.max_poll_time
         if max_poll is None:
-            max_poll = (
-                self._parse_time_to_minutes(self.time_limit)
-                * 60
-                * DEFAULT_POLL_TIME_MULTIPLIER
-            )
+            max_poll = self.timeout_min * 60 * DEFAULT_POLL_TIME_MULTIPLIER
 
         return SlurmPrefectFuture(
             job=job,
@@ -517,7 +509,7 @@ class SlurmTaskRunner(TaskRunner):
                         len(items),
                         num_batches,
                         self.units_per_worker,
-                        self.partition,
+                        self.slurm_partition,
                         self.slurm_array_parallelism,
                     )
                     futures: list[Any] = self._submit_batched_job_array(
@@ -527,7 +519,7 @@ class SlurmTaskRunner(TaskRunner):
                     logger.info(
                         "Submitting %s tasks as SLURM job array (partition=%s, parallelism=%s)",
                         map_length,
-                        self.partition,
+                        self.slurm_partition,
                         self.slurm_array_parallelism,
                     )
                     futures = self._submit_job_array(

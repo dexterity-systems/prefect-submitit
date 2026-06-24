@@ -28,7 +28,7 @@ def main(job_folder: str) -> None:
     job_path = folder / "job.pkl"
     result_path = folder / "result.pkl"
 
-    with open(job_path, "rb") as f:
+    with job_path.open("rb") as f:
         fn = pickle.load(f)
 
     try:
@@ -46,7 +46,7 @@ def main(job_folder: str) -> None:
     fd, tmp_path = tempfile.mkstemp(dir=folder, suffix=".tmp")
     with os.fdopen(fd, "wb") as f:
         pickle.dump(envelope, f)
-    os.rename(tmp_path, str(result_path))
+    Path(tmp_path).rename(result_path)
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ def _mock_runner(**overrides):
     runner.gpus_per_node = overrides.get("gpus_per_node", 0)
     runner.mem_gb = overrides.get("mem_gb", 4)
     runner.cpus_per_task = overrides.get("cpus_per_task", 1)
-    runner.time_limit = overrides.get("time_limit", "01:00:00")
+    runner.timeout_min = overrides.get("timeout_min", 60)
     runner.poll_interval = overrides.get("poll_interval", 0.5)
     runner.max_poll_time = overrides.get("max_poll_time")
     runner.srun_launch_concurrency = overrides.get("srun_launch_concurrency", 128)
@@ -71,11 +71,11 @@ class TestBuildSrunCommand:
         assert "4" in cmd
 
     def test_time_flag(self, tmp_path):
-        runner = _mock_runner(log_folder=str(tmp_path), time_limit="02:30:00")
+        runner = _mock_runner(log_folder=str(tmp_path), timeout_min=150)
         backend = SrunBackend(runner)
         cmd = backend._build_srun_command("/tmp/step_0")
         assert "--time" in cmd
-        assert "02:30:00" in cmd
+        assert "150" in cmd
 
 
 class TestSubmitOne:
@@ -93,7 +93,7 @@ class TestSubmitOne:
         def my_fn():
             return 42
 
-        future = backend.submit_one(my_fn, uuid4())
+        backend.submit_one(my_fn, uuid4())
 
         # Verify job.pkl was written
         job_pkl = tmp_path / "srun" / "step_0" / "job.pkl"
