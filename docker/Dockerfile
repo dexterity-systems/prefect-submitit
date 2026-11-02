@@ -3,7 +3,7 @@ FROM nathanhess/slurm:full-v1.2.0
 USER root
 
 # Install pixi (manages Python, PostgreSQL, and all project deps)
-RUN curl -fsSL https://pixi.sh/install.sh | PIXI_HOME=/usr/local bash
+RUN curl -fsSL https://pixi.sh/install.sh | PIXI_VERSION=v0.83.0 PIXI_HOME=/usr/local bash
 
 # Store pixi envs on a separate volume (/pixi-env) so they don't
 # clash with the host's macOS .pixi/ from the bind mount.

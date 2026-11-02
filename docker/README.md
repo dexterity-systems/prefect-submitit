@@ -45,6 +45,23 @@ exit
 pixi run slurm-down
 ```
 
+## Concurrent worktrees
+
+The image installs Pixi 0.83.0. Keep `pixi.lock` committed and use
+`pixi install --locked -e dev` and `pixi run --locked -e dev` for CI and agent
+validation. Ordinary local development can use the commands above.
+
+Each concurrent checkout must use a unique Compose project name, image tag, and
+published host port in its own Compose configuration. The project name gives its
+`pixi-env` volume a unique prefix. Do not reuse another checkout's volume or stop
+its containers. For isolated tests, omit published ports entirely: the test
+fixtures start their own Prefect server inside the container.
+
+The `/pixi-env` detached environment is intentional. After installation, inspect
+`pixi run -e dev python -c "import sys, prefect_submitit; print(sys.executable, prefect_submitit.__file__)"`.
+The interpreter must be under this container's `/pixi-env`, and the editable
+source must be under its `/workspace/src/prefect_submitit` bind mount.
+
 ## What Resets When
 
 | Action | What's lost |

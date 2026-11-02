@@ -12,7 +12,7 @@ If you’re planning a larger change (new features, behavior changes, refactors,
 ### Prerequisites
 
 - Python 3.12+
-- [Pixi](https://pixi.sh) package manager
+- [Pixi](https://pixi.sh) 0.83.0 or newer
 - Git
 
 ### Development Setup
@@ -27,7 +27,7 @@ If you’re planning a larger change (new features, behavior changes, refactors,
 2. Install dependencies:
 
    ```bash
-   pixi install
+   pixi install -e dev
    ```
 
 3. Install pre-commit hooks:
@@ -41,6 +41,21 @@ If you’re planning a larger change (new features, behavior changes, refactors,
    ```bash
    pixi run -e dev test
    ```
+
+### Lockfiles and worktrees
+
+Commit `pixi.lock`. Use ordinary `pixi install` and `pixi run` locally; use
+`--locked` in CI and agent work that does not change dependencies. Refresh with
+`pixi lock` only for intentional dependency changes, review the package changes,
+and check with `pixi lock --check`. Source edits, commits, comments, tasks, and
+version-only edits do not require a lock refresh.
+
+Each worktree needs its own installed environment. Run `pixi install -e dev`
+from that worktree, and use its `.pixi/envs/dev/bin/python` in editors and
+notebooks. Shared package caches are fine; never copy or link `.pixi` between
+worktrees. Docker intentionally uses detached environments in `/pixi-env`; use a
+separate Compose project and volume per checkout, and verify its editable source
+points to that checkout. See [Docker isolation](docker/README.md).
 
 ## Making Changes
 
@@ -98,6 +113,27 @@ Types: `feat`, `fix`, `docs`, `test`, `chore`, `refactor`, `perf`, `style`
 
 4. A maintainer will review your PR. Please be patient and responsive to
    feedback.
+
+## Versions and releases
+
+`[project].version` in `pyproject.toml` is the package version. Feature commits
+leave it unchanged; it identifies a release series, not a source revision. Read
+the installed version with `importlib.metadata.version("prefect-submitit")`.
+
+1. Set the intended final or prerelease version and update `CHANGELOG.md`.
+2. Synchronize with `pixi install -e dev`, run formatting and tests, then build
+   fresh artifacts with `pixi run -e dev build-dist` and `pixi run -e dev check-dist`.
+3. Run `pixi run -e dev check-release v<version>`. It verifies the wheel and
+   sdist metadata before the existing GitHub release workflow can publish.
+4. Commit the version and release notes, plus any required dependency lock change.
+   When publication is authorized, create the matching tag and GitHub release.
+5. Advance to the next planned development version after release, synchronize the
+   environment, and commit that version change.
+
+The Conda recipe builds the published PyPI sdist for the same manifest version.
+After that version is published, update its verified SHA-256 in `recipe/meta.yaml`
+and render/build the recipe from the repository checkout. An unpublished version
+or stale checksum must fail; the recipe must not substitute local source.
 
 ## Reporting Issues
 
