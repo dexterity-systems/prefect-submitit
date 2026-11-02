@@ -8,12 +8,21 @@ Project conventions for contributors (human and AI).
 
 | Setting     | Value                       |
 | ----------- | --------------------------- |
-| Environment | Pixi (`~/.pixi/bin/pixi`)   |
+| Environment | Pixi >=0.83.0 (selected full path)   |
 | Formatting  | Ruff                        |
 | Testing     | Pytest                      |
 
-IMPORTANT: Always use the full pixi path (`~/.pixi/bin/pixi`) when running
-commands. The short `pixi` form is for user-facing docs only.
+Always use the full path to a verified Pixi >=0.83.0 executable. During a staged
+migration, use a separate executable instead of replacing a shared older Pixi.
+The short `pixi` form below is for user-facing docs.
+
+Use `--locked` for installs and runs unless intentionally changing dependencies.
+Commit and review lock changes; never discard the lock or use `--frozen` to hide
+drift. Each worktree owns its installed `.pixi` environment and editable source;
+share only package caches. Docker intentionally uses `/pixi-env`, so use a unique
+Compose project, image tag, volume, and host port for each concurrent checkout.
+Do not stop another checkout's services. Follow `CONTRIBUTING.md` for versions
+and releases; feature commits leave the static package version unchanged.
 
 ---
 

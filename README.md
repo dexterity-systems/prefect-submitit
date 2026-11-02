@@ -242,13 +242,15 @@ env var → `PREFECT_API_URL` env var → discovery file (auto-written by
 
 ## Development
 
-Requires [pixi](https://pixi.sh):
+Requires [Pixi](https://pixi.sh) 0.83.0 or newer:
 
 ```bash
-pixi install
+pixi install -e dev
 pixi run -e dev fmt       # Format and lint
 pixi run -e dev test      # Run unit tests
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for lockfile, worktree, and release policy.
 
 ### Docker SLURM environment
 

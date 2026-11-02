@@ -28,9 +28,6 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Pixi lockfile (regenerate with `pixi install`)
-pixi.lock
-
 # SLURM logs
 slurm_logs/
 .slurm_test_logs/

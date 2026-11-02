@@ -1,5 +1,6 @@
 {% set name = "prefect-submitit" %}
-{% set version = "0.1.3" %}
+{% set project = load_file_data('../pyproject.toml', from_recipe_dir=True) %}
+{% set version = project['project']['version'] %}
 
 package:
   name: {{ name|lower }}
@@ -7,7 +8,7 @@ package:
 
 source:
   url: https://pypi.org/packages/source/{{ name[0] }}/{{ name }}/{{ name.replace('-', '_') }}-{{ version }}.tar.gz
-  sha256: 598c4eefbc481cc64267e33ed9c2f31fda2f166e4be9d0ebb6702cb30d102ace
+  sha256: 9034776e6e62e38e49c133cf4c4ae1f0629cf1c2c649a01983c47b9b85e72c19
 
 build:
   noarch: python
