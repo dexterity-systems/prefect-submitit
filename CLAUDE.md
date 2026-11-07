@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+@AGENTS.md
+
 Project conventions for contributors (human and AI).
 
 ---

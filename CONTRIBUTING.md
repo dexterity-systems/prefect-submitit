@@ -2,6 +2,10 @@
 
 Thank you for your interest in contributing! This guide will help you get
 started.
+
+Follow the [committed-content policy](AGENTS.md#committed-content) for source,
+documentation, examples, and generated artifacts.
+
 ## Before You Start (for larger changes)
 
 Small fixes and docs improvements are always welcome via PR.
